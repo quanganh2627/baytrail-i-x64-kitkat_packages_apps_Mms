@@ -339,6 +339,7 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
         }
 
         mListAdapter.changeCursor(null);
+        Contact.removeAllListener();
     }
 
     @Override
