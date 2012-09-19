@@ -380,11 +380,18 @@ public class ThumbnailManager extends BackgroundLoaderManager {
 
         private Bitmap requestDecode(byte[] bytes, int offset,
                 int length, Options options) {
+            Bitmap resultBitmap = null;
             if (options == null) {
                 options = new Options();
             }
-            return ensureGLCompatibleBitmap(
+
+            try {
+                resultBitmap = ensureGLCompatibleBitmap(
                     BitmapFactory.decodeByteArray(bytes, offset, length, options));
+            } catch (OutOfMemoryError e) {
+                Log.e(TAG,"there is no enough memory to decode this large bitmap");
+            }
+            return resultBitmap;
         }
 
         private Bitmap resizeDownBySideLength(
@@ -458,7 +465,14 @@ public class ThumbnailManager extends BackgroundLoaderManager {
             }
 
             options.inJustDecodeBounds = true;
-            BitmapFactory.decodeStream(inputStream, null, options);
+
+            try {
+                BitmapFactory.decodeStream(inputStream, null, options);
+            } catch (OutOfMemoryError e) {
+                Log.e(TAG,"there is no enough memory to decode this large bitmap");
+                return null;
+            }
+
             closeSilently(inputStream);
 
             // No way to reset the stream. Have to open it again :-(
@@ -473,7 +487,15 @@ public class ThumbnailManager extends BackgroundLoaderManager {
                     options.outWidth, options.outHeight, targetSize);
             options.inJustDecodeBounds = false;
 
-            Bitmap result = BitmapFactory.decodeStream(inputStream, null, options);
+            Bitmap result;
+            try {
+                result = BitmapFactory.decodeStream(inputStream, null, options);
+            } catch (OutOfMemoryError e) {
+                Log.e(TAG,"there is no enough memory to decode this large bitmap");
+                return null;
+            }
+
+
             closeSilently(inputStream);
 
             if (result == null) {
