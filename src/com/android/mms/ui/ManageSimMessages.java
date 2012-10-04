@@ -168,6 +168,7 @@ public class ManageSimMessages extends Activity
                 // Let user know the SIM is empty
                 updateState(SHOW_EMPTY);
             }
+            invalidateOptionsMenu();
         }
     }
 
