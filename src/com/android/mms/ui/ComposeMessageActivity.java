@@ -901,6 +901,9 @@ public class ComposeMessageActivity extends Activity
             Log.e(TAG, "bad menuInfo");
             return;
         }
+        if (info == null) {
+           return;
+        }
         final int position = info.position;
 
         addUriSpecificMenuItems(menu, v, position);
