@@ -463,7 +463,7 @@ public class WorkingMessage {
         if (mSlideshow != null && type == IMAGE) {
             // Prime the image's cache; helps A LOT when the image is coming from the network
             // (e.g. Picasa album). See b/5445690.
-            int numSlides = mSlideshow.size();
+            int numSlides = (mSlideshow == null) ? 0: mSlideshow.size();
             if (numSlides > 0) {
                 ImageModel imgModel = mSlideshow.get(numSlides - 1).getImage();
                 if (imgModel != null) {
