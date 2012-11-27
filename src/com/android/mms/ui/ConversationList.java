@@ -281,6 +281,7 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
 
         DraftCache.getInstance().removeOnDraftChangedListener(this);
 
+        unbindListeners(null);
         // Simply setting the choice mode causes the previous choice mode to finish and we exit
         // multi-select mode (if we're in it) and remove all the selections.
         getListView().setChoiceMode(ListView.CHOICE_MODE_MULTIPLE_MODAL);
@@ -293,6 +294,17 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
         }
 
         mListAdapter.changeCursor(null);
+    }
+
+    private void unbindListeners(final Collection<Long> threadIds) {
+        for (int i = 0 ; i < getListView().getChildCount(); i++) {
+            View view = getListView().getChildAt(i);
+            if (view instanceof ConversationListItem
+                    && (threadIds == null
+                    || threadIds.contains(((ConversationListItem)view).getConversation().getThreadId()))) {
+                ((ConversationListItem)view).unbind();
+            }
+        }
     }
 
     @Override
@@ -676,6 +688,9 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
                 @Override
                 public void run() {
                     int token = DELETE_CONVERSATION_TOKEN;
+                    if (mContext instanceof ConversationList) {
+                        ((ConversationList)mContext).unbindListeners(mThreadIds);
+                    }
                     if (mThreadIds == null) {
                         Conversation.startDeleteAll(mHandler, token, mDeleteLockedMessages);
                         DraftCache.getInstance().refresh();
