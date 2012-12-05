@@ -1911,6 +1911,7 @@ public class ComposeMessageActivity extends Activity
 
         mSubjectTextEditor.setText(mWorkingMessage.getSubject());
         mSubjectTextEditor.setVisibility(show ? View.VISIBLE : View.GONE);
+        invalidateOptionsMenu();
         hideOrShowTopPanel();
     }
 
