@@ -267,6 +267,26 @@ public class UriImage {
 
     private static final int NUMBER_OF_RESIZE_ATTEMPTS = 4;
 
+    // This computes a sample size which makes the longer side If that's not possible, return 1.
+    private static int computeSampleSizeLarger(int w, int h,
+            int minWidth,int minHeight) {
+        int initialSize = Math.max(w / minWidth, h / minHeight);
+        if (initialSize <= 1) return 1;
+
+        return (initialSize <= 8)
+                ? prevPowerOf2(initialSize)
+                : (initialSize / 8 * 8);
+    }
+
+    // Returns the previous power of two.
+    // Returns the input if it is already power of 2.
+    // Returns 1 if the input is <= 0
+    private static int prevPowerOf2(int n) {
+        if (n <= 0) return 1;
+        return Integer.highestOneBit(n);
+    }
+
+
     /**
      * Resize and recompress the image such that it fits the given limits. The resulting byte
      * array contains an image in JPEG format, regardless of the original image's content type.
@@ -280,17 +300,20 @@ public class UriImage {
             int orientation) {
         int outWidth = width;
         int outHeight = height;
+        int sampleSize = 1;
 
         float scaleFactor = 1.F;
         while ((outWidth * scaleFactor > widthLimit) || (outHeight * scaleFactor > heightLimit)) {
             scaleFactor *= .75F;
         }
+        sampleSize = computeSampleSizeLarger(width, height, widthLimit, heightLimit);
 
         if (Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
             Log.v(TAG, "getResizedBitmap: wlimit=" + widthLimit +
                     ", hlimit=" + heightLimit + ", sizeLimit=" + byteLimit +
                     ", width=" + width + ", height=" + height +
                     ", initialScaleFactor=" + scaleFactor +
+                    ", sampleSize=" + sampleSize +
                     ", uri=" + uri);
         }
 
@@ -298,7 +321,6 @@ public class UriImage {
         ByteArrayOutputStream os = null;
         try {
             int attempts = 1;
-            int sampleSize = 1;
             BitmapFactory.Options options = new BitmapFactory.Options();
             int quality = MessageUtils.IMAGE_COMPRESSION_QUALITY;
             Bitmap b = null;
