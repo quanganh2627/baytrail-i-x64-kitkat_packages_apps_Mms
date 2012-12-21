@@ -58,7 +58,14 @@ public class AttachmentEditor extends LinearLayout {
     private SlideshowModel mSlideshow;
     private Presenter mPresenter;
     private boolean mCanSend;
+    private boolean mCanEdit;
     private Button mSendButton;
+    private Button mEditButton;
+
+    private Button mReplaceButton;
+    private Button mRemoveButton;
+    private Button mViewButton;
+    private ImageButton mPlayBtn;
 
     public AttachmentEditor(Context context, AttributeSet attr) {
         super(context, attr);
@@ -137,6 +144,37 @@ public class AttachmentEditor extends LinearLayout {
         public void onClick(View v) {
             Message msg = Message.obtain(mHandler, mWhat);
             msg.sendToTarget();
+            if (mWhat != MSG_REPLACE_IMAGE
+                    && mWhat != MSG_REPLACE_VIDEO
+                    && mWhat != MSG_REPLACE_AUDIO) {
+                updateButtonsState(false);
+            }
+        }
+    }
+
+    private void updateButtonState(Button button, boolean flag) {
+        if (button != null) {
+            button.setEnabled(flag);
+            button.setFocusable(flag);
+        }
+    }
+
+    private void updateButtonState(ImageButton button, boolean flag) {
+        if (button != null) {
+            button.setEnabled(flag);
+            button.setFocusable(flag);
+        }
+    }
+
+    public void updateButtonsState(boolean flag) {
+        if (mSlideshow != null && mSlideshow.size() > 1) {
+            updateButtonState(mPlayBtn, flag);
+            updateButtonState(mRemoveButton, flag);
+            updateButtonState(mEditButton, flag);
+        } else {
+            updateButtonState(mViewButton, flag);
+            updateButtonState(mReplaceButton, flag);
+            updateButtonState(mRemoveButton, flag);
         }
     }
 
@@ -185,13 +223,15 @@ public class AttachmentEditor extends LinearLayout {
         LinearLayout view = (LinearLayout)getStubView(stub_view_id, real_view_id);
         view.setVisibility(View.VISIBLE);
 
-        Button viewButton = (Button) view.findViewById(view_button_id);
-        Button replaceButton = (Button) view.findViewById(replace_button_id);
-        Button removeButton = (Button) view.findViewById(remove_button_id);
+        mViewButton = (Button) view.findViewById(view_button_id);
+        mReplaceButton = (Button) view.findViewById(replace_button_id);
+        mRemoveButton = (Button) view.findViewById(remove_button_id);
 
-        viewButton.setOnClickListener(new MessageOnClick(view_message));
-        replaceButton.setOnClickListener(new MessageOnClick(replace_message));
-        removeButton.setOnClickListener(new MessageOnClick(remove_message));
+
+
+        mViewButton.setOnClickListener(new MessageOnClick(view_message));
+        mReplaceButton.setOnClickListener(new MessageOnClick(replace_message));
+        mRemoveButton.setOnClickListener(new MessageOnClick(remove_message));
 
         return (SlideViewInterface) view;
     }
@@ -202,18 +242,19 @@ public class AttachmentEditor extends LinearLayout {
                 R.id.slideshow_attachment_view);
         view.setVisibility(View.VISIBLE);
 
-        Button editBtn = (Button) view.findViewById(R.id.edit_slideshow_button);
+        mEditButton = (Button) view.findViewById(R.id.edit_slideshow_button);
+
         mSendButton = (Button) view.findViewById(R.id.send_slideshow_button);
         updateSendButton();
-        final ImageButton playBtn = (ImageButton) view.findViewById(
+        mPlayBtn = (ImageButton) view.findViewById(
                 R.id.play_slideshow_button);
 
-        editBtn.setOnClickListener(new MessageOnClick(MSG_EDIT_SLIDESHOW));
+        mEditButton.setOnClickListener(new MessageOnClick(MSG_EDIT_SLIDESHOW));
         mSendButton.setOnClickListener(new MessageOnClick(MSG_SEND_SLIDESHOW));
-        playBtn.setOnClickListener(new MessageOnClick(MSG_PLAY_SLIDESHOW));
+        mPlayBtn.setOnClickListener(new MessageOnClick(MSG_PLAY_SLIDESHOW));
 
-        Button removeButton = (Button) view.findViewById(R.id.remove_slideshow_button);
-        removeButton.setOnClickListener(new MessageOnClick(MSG_REMOVE_ATTACHMENT));
+        mRemoveButton = (Button) view.findViewById(R.id.remove_slideshow_button);
+        mRemoveButton.setOnClickListener(new MessageOnClick(MSG_REMOVE_ATTACHMENT));
 
         return (SlideViewInterface) view;
     }
