@@ -2239,6 +2239,9 @@ public class ComposeMessageActivity extends Activity
 
         addRecipientsListeners();
 
+        if (mAttachmentEditor != null) {
+            mAttachmentEditor.updateButtonsState(true);
+        }
         if (Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
             log("update title, mConversation=" + mConversation.toString());
         }
