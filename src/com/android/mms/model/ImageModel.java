@@ -65,6 +65,7 @@ public class ImageModel extends RegionMediaModel {
 
     private int mWidth;
     private int mHeight;
+    private int mOrientation;
     private SoftReference<Bitmap> mFullSizeBitmapCache = new SoftReference<Bitmap>(null);
     private ItemLoadedFuture mItemLoadedFuture;
 
@@ -92,6 +93,7 @@ public class ImageModel extends RegionMediaModel {
         mSrc = uriImage.getSrc();
         mWidth = uriImage.getWidth();
         mHeight = uriImage.getHeight();
+        mOrientation = uriImage.getOrientation();
 
         if (LOCAL_LOGV) {
             Log.v(TAG, "New ImageModel created:"
@@ -105,6 +107,7 @@ public class ImageModel extends RegionMediaModel {
         UriImage uriImage = new UriImage(mContext, uri);
         mWidth = uriImage.getWidth();
         mHeight = uriImage.getHeight();
+        mOrientation = uriImage.getOrientation();
 
         if (LOCAL_LOGV) {
             Log.v(TAG, "Image bounds: " + mWidth + "x" + mHeight);
@@ -154,7 +157,8 @@ public class ImageModel extends RegionMediaModel {
 
     private Bitmap createBitmap(int thumbnailBoundsLimit, Uri uri) {
         byte[] data = UriImage.getResizedImageData(mWidth, mHeight,
-                thumbnailBoundsLimit, thumbnailBoundsLimit, PICTURE_SIZE_LIMIT, uri, mContext);
+                thumbnailBoundsLimit, thumbnailBoundsLimit, PICTURE_SIZE_LIMIT, uri, mContext,
+                mOrientation);
         if (LOCAL_LOGV) {
             Log.v(TAG, "createBitmap size: " + (data == null ? data : data.length));
         }
