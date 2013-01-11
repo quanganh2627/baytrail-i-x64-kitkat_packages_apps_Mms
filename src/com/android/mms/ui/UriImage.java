@@ -29,6 +29,8 @@ import android.database.sqlite.SqliteWrapper;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.CompressFormat;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.provider.MediaStore.Images;
 import android.provider.Telephony.Mms.Part;
@@ -53,6 +55,7 @@ public class UriImage {
     private String mSrc;
     private int mWidth;
     private int mHeight;
+    private int mOrientation;
 
     public UriImage(Context context, Uri uri) {
         if ((null == context) || (null == uri)) {
@@ -73,7 +76,7 @@ public class UriImage {
 
         if (LOCAL_LOGV) {
             Log.v(TAG, "UriImage uri: " + uri + " mPath: " + mPath + " mWidth: " + mWidth +
-                    " mHeight: " + mHeight);
+                    " mHeight: " + mHeight + " mOrientation: " + mOrientation);
         }
     }
 
@@ -94,6 +97,7 @@ public class UriImage {
         // user the picture couldn't be attached.
 
         buildSrcFromPath();
+        getOrientationFromPath(mPath);
     }
 
     private void buildSrcFromPath() {
@@ -130,12 +134,13 @@ public class UriImage {
             String filePath;
             if (ImageModel.isMmsUri(uri)) {
                 filePath = c.getString(c.getColumnIndexOrThrow(Part.FILENAME));
+                String path = c.getString(c.getColumnIndexOrThrow(Part._DATA));
                 if (TextUtils.isEmpty(filePath)) {
-                    filePath = c.getString(
-                            c.getColumnIndexOrThrow(Part._DATA));
+                    filePath = path;
                 }
                 mContentType = c.getString(
                         c.getColumnIndexOrThrow(Part.CONTENT_TYPE));
+                getOrientationFromPath(path);
             } else {
                 filePath = uri.getPath();
                 try {
@@ -148,6 +153,13 @@ public class UriImage {
                         mContentType = resolver.getType(uri);
                         Log.v(TAG, "initFromContentUri: " + uri + ", getType => " + mContentType);
                     }
+                }
+
+                try {
+                    mOrientation = c.getInt(c.getColumnIndexOrThrow(Images.Media.ORIENTATION));
+                } catch (IllegalArgumentException e) {
+                    Log.e(TAG,"Can not find the ORIENTATION column ...uri="
+                            + uri + "...file path==" + filePath);
                 }
 
                 // use the original filename if possible
@@ -220,6 +232,10 @@ public class UriImage {
         return mHeight;
     }
 
+    public int getOrientation() {
+        return mOrientation;
+    }
+
     /**
      * Get a version of this image resized to fit the given dimension and byte-size limits. Note
      * that the content type of the resulting PduPart may not be the same as the content type of
@@ -234,7 +250,7 @@ public class UriImage {
         PduPart part = new PduPart();
 
         byte[] data =  getResizedImageData(mWidth, mHeight,
-                widthLimit, heightLimit, byteLimit, mUri, mContext);
+                widthLimit, heightLimit, byteLimit, mUri, mContext, mOrientation);
         if (data == null) {
             if (LOCAL_LOGV) {
                 Log.v(TAG, "Resize image failed.");
@@ -260,7 +276,8 @@ public class UriImage {
      * @return A resized/recompressed version of this image, in JPEG format
      */
     public static byte[] getResizedImageData(int width, int height,
-            int widthLimit, int heightLimit, int byteLimit, Uri uri, Context context) {
+            int widthLimit, int heightLimit, int byteLimit, Uri uri, Context context,
+            int orientation) {
         int outWidth = width;
         int outHeight = height;
 
@@ -350,6 +367,17 @@ public class UriImage {
                             return null;
                         }
                     }
+                    if (orientation != 0) {
+                        Matrix matrix = new Matrix();
+                        matrix.postScale(1, 1);
+                        matrix.setRotate(orientation);
+                        if (Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
+                            Log.v(TAG, "Bitmap.createScaledBitmap b.getWidth()= "
+                                    + b.getWidth() + " b.getWidth()= " + b.getWidth());
+                        }
+                        b = Bitmap.createBitmap(b, 0, 0, b.getWidth(), b.getHeight(), matrix, true);
+                        orientation = 0;
+                    }
 
                     // Compress the image into a JPG. Start with MessageUtils.IMAGE_COMPRESSION_QUALITY.
                     // In case that the image byte size is still too large reduce the quality in
@@ -430,5 +458,55 @@ public class UriImage {
                 }
             }
         }
+    }
+
+    private boolean getOrientationFromPath(String path) {
+        if (mContentType != null
+                && (ContentType.IMAGE_JPG.equals(mContentType)
+                || ContentType.IMAGE_JPEG.equals(mContentType)
+                || ContentType.IMAGE_PNG.equals(mContentType))) {
+            ExifInterface exif = null;
+            try {
+                exif = new ExifInterface(path);
+            } catch (IOException ex) {
+                ex.printStackTrace();
+                return false;
+            }
+
+            if (exif == null)
+                return false;
+
+            int orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, -1);
+
+            if (orientation == ExifInterface.ORIENTATION_ROTATE_90
+                    || orientation == ExifInterface.ORIENTATION_ROTATE_180
+                    || orientation == ExifInterface.ORIENTATION_ROTATE_270) {
+                if (LOCAL_LOGV) {
+                    Log.v(TAG, "getOrientationFromPath... content type ="
+                            + mContentType + "  uri = " + mUri
+                            + "  path =" + mPath + "  orientation ="
+                            + orientation);
+                }
+                switch (orientation) {
+                    case ExifInterface.ORIENTATION_ROTATE_90:
+                        mOrientation = 90;
+                        break;
+                    case ExifInterface.ORIENTATION_ROTATE_180:
+                        mOrientation = 180;
+                        break;
+                    case ExifInterface.ORIENTATION_ROTATE_270:
+                        mOrientation = 270;
+                        break;
+                    default:
+                        mOrientation = 0;
+                        break;
+                }
+            }
+
+            if (mOrientation != 0) {
+                return true;
+            }
+        }
+        return false;
     }
 }
