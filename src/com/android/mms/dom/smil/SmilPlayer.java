@@ -301,6 +301,7 @@ public class SmilPlayer implements Runnable {
         mMediaTimeUpdatedEvent = ((DocumentEvent) mRoot).createEvent("Event");
         mMediaTimeUpdatedEvent.initEvent(MEDIA_TIME_UPDATED_EVENT, false, false);
         mActiveElements = new ArrayList<ElementTime>();
+        mState = SmilPlayerState.INITIALIZED;
     }
 
     public synchronized void play() {
