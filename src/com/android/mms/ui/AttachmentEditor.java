@@ -228,11 +228,15 @@ public class AttachmentEditor extends LinearLayout {
         mRemoveButton = (Button) view.findViewById(remove_button_id);
 
 
-
-        mViewButton.setOnClickListener(new MessageOnClick(view_message));
-        mReplaceButton.setOnClickListener(new MessageOnClick(replace_message));
-        mRemoveButton.setOnClickListener(new MessageOnClick(remove_message));
-
+        if (mViewButton != null) {
+            mViewButton.setOnClickListener(new MessageOnClick(view_message));
+        }
+        if (mReplaceButton != null) {
+            mReplaceButton.setOnClickListener(new MessageOnClick(replace_message));
+        }
+        if (mRemoveButton != null) {
+            mRemoveButton.setOnClickListener(new MessageOnClick(remove_message));
+        }
         return (SlideViewInterface) view;
     }
 
@@ -249,12 +253,20 @@ public class AttachmentEditor extends LinearLayout {
         mPlayBtn = (ImageButton) view.findViewById(
                 R.id.play_slideshow_button);
 
-        mEditButton.setOnClickListener(new MessageOnClick(MSG_EDIT_SLIDESHOW));
-        mSendButton.setOnClickListener(new MessageOnClick(MSG_SEND_SLIDESHOW));
-        mPlayBtn.setOnClickListener(new MessageOnClick(MSG_PLAY_SLIDESHOW));
+        if (mEditButton != null) {
+            mEditButton.setOnClickListener(new MessageOnClick(MSG_EDIT_SLIDESHOW));
+        }
+        if (mSendButton != null) {
+            mSendButton.setOnClickListener(new MessageOnClick(MSG_SEND_SLIDESHOW));
+        }
+        if (mPlayBtn != null) {
+            mPlayBtn.setOnClickListener(new MessageOnClick(MSG_PLAY_SLIDESHOW));
+        }
 
         mRemoveButton = (Button) view.findViewById(R.id.remove_slideshow_button);
-        mRemoveButton.setOnClickListener(new MessageOnClick(MSG_REMOVE_ATTACHMENT));
+        if (mRemoveButton != null) {
+            mRemoveButton.setOnClickListener(new MessageOnClick(MSG_REMOVE_ATTACHMENT));
+        }
 
         return (SlideViewInterface) view;
     }
