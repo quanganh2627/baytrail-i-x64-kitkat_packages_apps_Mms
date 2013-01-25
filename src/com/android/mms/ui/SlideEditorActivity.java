@@ -228,6 +228,12 @@ public class SlideEditorActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        mPreview.setEnabled(true);
+        super.onResume();
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
 
@@ -329,8 +335,11 @@ public class SlideEditorActivity extends Activity {
     }
 
     private void previewSlideshow() {
-        MessageUtils.viewMmsMessageAttachment(SlideEditorActivity.this, mUri, mSlideshowModel,
-                getAsyncDialog());
+        if (mPreview.isEnabled()) {
+            mPreview.setEnabled(false);
+            MessageUtils.viewMmsMessageAttachment(SlideEditorActivity.this, mUri, mSlideshowModel,
+                    getAsyncDialog());
+        }
     }
 
     private void updateTitle() {
