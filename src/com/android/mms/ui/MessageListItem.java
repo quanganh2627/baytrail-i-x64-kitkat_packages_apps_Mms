@@ -409,6 +409,7 @@ public class MessageListItem extends LinearLayout implements
                 } else {
                     mPresenter.setModel(mMessageItem.mSlideshow);
                     mPresenter.setView(this);
+                    mPresenter.registerModelChangedObserver();
                 }
                 if (mImageLoadedCallback == null) {
                     mImageLoadedCallback = new ImageLoadedCallback(this);
@@ -416,6 +417,7 @@ public class MessageListItem extends LinearLayout implements
                     mImageLoadedCallback.reset(this);
                 }
                 mPresenter.present(mImageLoadedCallback);
+                mPresenter.unregisterModelChangedObserver();
             }
         }
         drawRightStatusIndicator(mMessageItem);
