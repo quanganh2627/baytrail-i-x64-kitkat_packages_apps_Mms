@@ -64,6 +64,18 @@ public class SlideListItemView extends LinearLayout implements SlideViewInterfac
         mAttachmentIcon = (ImageView) findViewById(R.id.attachment_icon);
     }
 
+    public int getImageMediaWidth() {
+        if (mImagePreview == null || mImagePreview.getDrawable() == null)
+            return 0;
+        return mImagePreview.getDrawable().getIntrinsicWidth();
+    }
+
+    public int getImageMediaHeight() {
+        if (mImagePreview == null || mImagePreview.getDrawable() == null)
+            return 0;
+        return mImagePreview.getDrawable().getIntrinsicHeight();
+    }
+
     public void startAudio() {
         // Playing audio is not needed in this view.
     }

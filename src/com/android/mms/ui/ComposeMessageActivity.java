@@ -86,6 +86,7 @@ import android.provider.Telephony.Mms;
 import android.provider.Telephony.Sms;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.SmsMessage;
+import android.telephony.TelephonyManager;
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.InputFilter.LengthFilter;
@@ -120,6 +121,7 @@ import android.widget.Toast;
 
 import com.android.internal.telephony.TelephonyIntents;
 import com.android.internal.telephony.TelephonyProperties;
+import com.android.mms.ExceedMessageSizeException;
 import com.android.mms.LogTag;
 import com.android.mms.MmsApp;
 import com.android.mms.MmsConfig;
@@ -542,7 +544,8 @@ public class ComposeMessageActivity extends Activity
     private boolean isCursorValid() {
         // Check whether the cursor is valid or not.
         Cursor cursor = mMsgListAdapter.getCursor();
-        if (cursor.isClosed() || cursor.isBeforeFirst() || cursor.isAfterLast()) {
+        if (cursor == null || cursor.isClosed()
+                || cursor.isBeforeFirst() || cursor.isAfterLast()) {
             Log.e(TAG, "Bad cursor.", new RuntimeException());
             return false;
         }
@@ -899,6 +902,9 @@ public class ComposeMessageActivity extends Activity
         } catch (ClassCastException e) {
             Log.e(TAG, "bad menuInfo");
             return;
+        }
+        if (info == null) {
+           return;
         }
         final int position = info.position;
 
@@ -1781,6 +1787,7 @@ public class ComposeMessageActivity extends Activity
         mRecipientsPicker.setOnClickListener(this);
 
         mRecipientsEditor.setAdapter(new ChipsRecipientAdapter(this));
+        mRecipientsEditor.setText(null);
         mRecipientsEditor.populate(recipients);
         mRecipientsEditor.setOnCreateContextMenuListener(mRecipientsMenuCreateListener);
         mRecipientsEditor.addTextChangedListener(mRecipientsWatcher);
@@ -1898,6 +1905,7 @@ public class ComposeMessageActivity extends Activity
 
         mSubjectTextEditor.setText(mWorkingMessage.getSubject());
         mSubjectTextEditor.setVisibility(show ? View.VISIBLE : View.GONE);
+        invalidateOptionsMenu();
         hideOrShowTopPanel();
     }
 
@@ -2090,7 +2098,7 @@ public class ComposeMessageActivity extends Activity
                 mWorkingMessage.unDiscard();    // it was discarded in onStop().
 
                 sanityCheckConversation();
-            } else if (isRecipientsEditorVisible()) {
+            } else if (isRecipientsEditorVisible() && recipientCount() > 0) {
                 if (LogTag.VERBOSE) {
                     log("onRestart: goToConversationList");
                 }
@@ -2233,6 +2241,9 @@ public class ComposeMessageActivity extends Activity
 
         addRecipientsListeners();
 
+        if (mAttachmentEditor != null) {
+            mAttachmentEditor.updateButtonsState(true);
+        }
         if (Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
             log("update title, mConversation=" + mConversation.toString());
         }
@@ -2610,13 +2621,16 @@ public class ComposeMessageActivity extends Activity
 
         menu.clear();
 
-        if (isRecipientCallable()) {
-            MenuItem item = menu.add(0, MENU_CALL_RECIPIENT, 0, R.string.menu_call)
-                .setIcon(R.drawable.ic_menu_call)
-                .setTitle(R.string.menu_call);
-            if (!isRecipientsEditorVisible()) {
-                // If we're not composing a new message, show the call icon in the actionbar
-                item.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+        final TelephonyManager tm = (TelephonyManager)getSystemService(Context.TELEPHONY_SERVICE);
+        if (tm != null && tm.isVoiceCapable()) {
+            if (isRecipientCallable()) {
+                MenuItem item = menu.add(0, MENU_CALL_RECIPIENT, 0, R.string.menu_call)
+                    .setIcon(R.drawable.ic_menu_call)
+                    .setTitle(R.string.menu_call);
+                if (!isRecipientsEditorVisible()) {
+                    // If we're not composing a new message, show the call icon in the actionbar
+                    item.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+                }
             }
         }
 
@@ -3722,13 +3736,19 @@ public class ComposeMessageActivity extends Activity
             // them back once the recipient list has settled.
             removeRecipientsListeners();
 
-            mWorkingMessage.send(mDebugRecipients);
+            try {
+                mWorkingMessage.send(mDebugRecipients);
 
-            mSentMessage = true;
-            mSendingMessage = true;
-            addRecipientsListeners();
+                mSentMessage = true;
+                mSendingMessage = true;
+                addRecipientsListeners();
 
-            mScrollOnSend = true;   // in the next onQueryComplete, scroll the list to the end.
+                mScrollOnSend = true;   // in the next onQueryComplete, scroll the list to the end.
+            } catch (ExceedMessageSizeException ex) {
+                handleAddAttachmentError(WorkingMessage.MESSAGE_SIZE_EXCEEDED,
+                        R.string.type_picture);
+                return;
+            }
         }
         // But bail out if we are supposed to exit after the message is sent.
         if (mExitOnSent) {
@@ -3921,31 +3941,34 @@ public class ComposeMessageActivity extends Activity
      * @param listSizeChange the amount the message list view size has vertically changed
      */
     private void smoothScrollToEnd(boolean force, int listSizeChange) {
-        int last = mMsgListView.getLastVisiblePosition();
-        int newPosition = mMsgListAdapter.getCount() - 1;
-        if (last < 0 || newPosition < 0) {
+        int lastItemVisible = mMsgListView.getLastVisiblePosition();
+        int lastItemInList = mMsgListAdapter.getCount() - 1;
+        if (lastItemVisible < 0 || lastItemInList < 0) {
             if (LogTag.VERBOSE || Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
-                Log.v(TAG, "smoothScrollToEnd: last=" + last + ", newPos=" + newPosition +
+                Log.v(TAG, "smoothScrollToEnd: lastItemVisible=" + lastItemVisible +
+                        ", lastItemInList=" + lastItemInList +
                         ", mMsgListView not ready");
             }
             return;
         }
 
-        View lastChild = mMsgListView.getChildAt(last - mMsgListView.getFirstVisiblePosition());
-        int bottom = 0;
-        int height = 0;
-        if (lastChild != null) {
-            bottom = lastChild.getBottom();
-            height = lastChild.getHeight();
+        View lastChildVisible =
+                mMsgListView.getChildAt(lastItemVisible - mMsgListView.getFirstVisiblePosition());
+        int lastVisibleItemBottom = 0;
+        int lastVisibleItemHeight = 0;
+        if (lastChildVisible != null) {
+            lastVisibleItemBottom = lastChildVisible.getBottom();
+            lastVisibleItemHeight = lastChildVisible.getHeight();
         }
 
         if (LogTag.VERBOSE || Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
-            Log.v(TAG, "smoothScrollToEnd newPosition: " + newPosition +
+            Log.v(TAG, "smoothScrollToEnd newPosition: " + lastItemInList +
                     " mLastSmoothScrollPosition: " + mLastSmoothScrollPosition +
                     " first: " + mMsgListView.getFirstVisiblePosition() +
-                    " last: " + last +
-                    " bottom: " + bottom +
-                    " bottom + listSizeChange: " + (bottom + listSizeChange) +
+                    " lastItemVisible: " + lastItemVisible +
+                    " lastVisibleItemBottom: " + lastVisibleItemBottom +
+                    " lastVisibleItemBottom + listSizeChange: " +
+                    (lastVisibleItemBottom + listSizeChange) +
                     " mMsgListView.getHeight() - mMsgListView.getPaddingBottom(): " +
                     (mMsgListView.getHeight() - mMsgListView.getPaddingBottom()) +
                     " listSizeChange: " + listSizeChange);
@@ -3964,45 +3987,50 @@ public class ComposeMessageActivity extends Activity
         // attachment thumbnail, such as picture. In this situation, we want to scroll the list so
         // the bottom of the thumbnail is visible and the top of the item is scroll off the screen.
         int listHeight = mMsgListView.getHeight();
-        if (force || ((listSizeChange != 0 || newPosition != mLastSmoothScrollPosition) &&
-                bottom + listSizeChange <=
-                        listHeight - mMsgListView.getPaddingBottom()) ||
-                        height > listHeight) {
+        boolean lastItemTooTall = lastVisibleItemHeight > listHeight;
+        boolean willScroll = force ||
+                ((listSizeChange != 0 || lastItemInList != mLastSmoothScrollPosition) &&
+                lastVisibleItemBottom + listSizeChange <=
+                    listHeight - mMsgListView.getPaddingBottom());
+        if (willScroll || (lastItemTooTall && lastItemInList == lastItemVisible)) {
             if (Math.abs(listSizeChange) > SMOOTH_SCROLL_THRESHOLD) {
                 // When the keyboard comes up, the window manager initiates a cross fade
                 // animation that conflicts with smooth scroll. Handle that case by jumping the
                 // list directly to the end.
                 if (LogTag.VERBOSE || Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
-                    Log.v(TAG, "keyboard state changed. setSelection=" + newPosition);
+                    Log.v(TAG, "keyboard state changed. setSelection=" + lastItemInList);
                 }
-                if (height > listHeight) {
+                if (lastItemTooTall) {
                     // If the height of the last item is taller than the whole height of the list,
                     // we need to scroll that item so that its top is negative or above the top of
                     // the list. That way, the bottom of the last item will be exposed above the
                     // keyboard.
-                    mMsgListView.setSelectionFromTop(newPosition, listHeight - height);
+                    mMsgListView.setSelectionFromTop(lastItemInList,
+                            listHeight - lastVisibleItemHeight);
                 } else {
-                    mMsgListView.setSelection(newPosition);
+                    mMsgListView.setSelection(lastItemInList);
                 }
-            } else if (newPosition - last > MAX_ITEMS_TO_INVOKE_SCROLL_SHORTCUT) {
+            } else if (lastItemInList - lastItemVisible > MAX_ITEMS_TO_INVOKE_SCROLL_SHORTCUT) {
                 if (LogTag.VERBOSE || Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
-                    Log.v(TAG, "too many to scroll, setSelection=" + newPosition);
+                    Log.v(TAG, "too many to scroll, setSelection=" + lastItemInList);
                 }
-                mMsgListView.setSelection(newPosition);
+                mMsgListView.setSelection(lastItemInList);
             } else {
                 if (LogTag.VERBOSE || Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
-                    Log.v(TAG, "smooth scroll to " + newPosition);
+                    Log.v(TAG, "smooth scroll to " + lastItemInList);
                 }
-                if (height > listHeight) {
+                if (lastItemTooTall) {
                     // If the height of the last item is taller than the whole height of the list,
                     // we need to scroll that item so that its top is negative or above the top of
                     // the list. That way, the bottom of the last item will be exposed above the
-                    // keyboard.
-                    mMsgListView.setSelectionFromTop(newPosition, listHeight - height);
+                    // keyboard. We should use smoothScrollToPositionFromTop here, but it doesn't
+                    // seem to work -- the list ends up scrolling to a random position.
+                    mMsgListView.setSelectionFromTop(lastItemInList,
+                            listHeight - lastVisibleItemHeight);
                 } else {
-                    mMsgListView.smoothScrollToPosition(newPosition);
+                    mMsgListView.smoothScrollToPosition(lastItemInList);
                 }
-                mLastSmoothScrollPosition = newPosition;
+                mLastSmoothScrollPosition = lastItemInList;
             }
         }
     }

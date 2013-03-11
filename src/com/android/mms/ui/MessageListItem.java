@@ -315,9 +315,7 @@ public class MessageListItem extends LinearLayout implements
         // will set the avatar to the generic avatar then when this method is called again
         // from onPduLoaded, it will reset to the real avatar. This test is to avoid that flash.
         if (!sameItem || haveLoadedPdu) {
-            boolean isSelf = Sms.isOutgoingFolder(mMessageItem.mBoxId);
-            String addr = isSelf ? null : mMessageItem.mAddress;
-            updateAvatarView(addr, isSelf);
+            updateAvatarView(mMessageItem.mAddress, false);
         }
 
         // Get and/or lazily set the formatted message from/on the
@@ -405,6 +403,7 @@ public class MessageListItem extends LinearLayout implements
                 } else {
                     mPresenter.setModel(mMessageItem.mSlideshow);
                     mPresenter.setView(this);
+                    mPresenter.registerModelChangedObserver();
                 }
                 if (mImageLoadedCallback == null) {
                     mImageLoadedCallback = new ImageLoadedCallback(this);
@@ -412,6 +411,7 @@ public class MessageListItem extends LinearLayout implements
                     mImageLoadedCallback.reset(this);
                 }
                 mPresenter.present(mImageLoadedCallback);
+                mPresenter.unregisterModelChangedObserver();
             }
         }
         drawRightStatusIndicator(mMessageItem);

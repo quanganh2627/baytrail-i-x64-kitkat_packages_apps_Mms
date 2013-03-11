@@ -109,6 +109,12 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
     private TextView mUnreadConvCount;
     private MenuItem mSearchItem;
     private SearchView mSearchView;
+    private int mSavedFirstVisiblePosition = AdapterView.INVALID_POSITION;
+    private int mSavedFirstItemOffset;
+
+    // keys for extras and icicles
+    private final static String LAST_LIST_POS = "last_list_pos";
+    private final static String LAST_LIST_OFFSET = "last_list_offset";
 
     static private final String CHECKED_MESSAGE_LIMITS = "checked_message_limits";
 
@@ -142,6 +148,36 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
         if (!checkedMessageLimits || DEBUG) {
             runOneTimeStorageLimitCheckForLegacyMessages();
         }
+
+        if (savedInstanceState != null) {
+            mSavedFirstVisiblePosition = savedInstanceState.getInt(LAST_LIST_POS,
+                    AdapterView.INVALID_POSITION);
+            mSavedFirstItemOffset = savedInstanceState.getInt(LAST_LIST_OFFSET, 0);
+        } else {
+            mSavedFirstVisiblePosition = AdapterView.INVALID_POSITION;
+            mSavedFirstItemOffset = 0;
+        }
+    }
+
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+
+        outState.putInt(LAST_LIST_POS, mSavedFirstVisiblePosition);
+        outState.putInt(LAST_LIST_OFFSET, mSavedFirstItemOffset);
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+
+        // Remember where the list is scrolled to so we can restore the scroll position
+        // when we come back to this activity and *after* we complete querying for the
+        // conversations.
+        ListView listView = getListView();
+        mSavedFirstVisiblePosition = listView.getFirstVisiblePosition();
+        View firstChild = listView.getChildAt(0);
+        mSavedFirstItemOffset = (firstChild == null) ? 0 : firstChild.getTop();
     }
 
     private void setupActionBar() {
@@ -281,6 +317,7 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
 
         DraftCache.getInstance().removeOnDraftChangedListener(this);
 
+        unbindListeners(null);
         // Simply setting the choice mode causes the previous choice mode to finish and we exit
         // multi-select mode (if we're in it) and remove all the selections.
         getListView().setChoiceMode(ListView.CHOICE_MODE_MULTIPLE_MODAL);
@@ -293,6 +330,17 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
         }
 
         mListAdapter.changeCursor(null);
+    }
+
+    private void unbindListeners(final Collection<Long> threadIds) {
+        for (int i = 0 ; i < getListView().getChildCount(); i++) {
+            View view = getListView().getChildAt(i);
+            if (view instanceof ConversationListItem
+                    && (threadIds == null
+                    || threadIds.contains(((ConversationListItem)view).getConversation().getThreadId()))) {
+                ((ConversationListItem)view).unbind();
+            }
+        }
     }
 
     @Override
@@ -676,6 +724,9 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
                 @Override
                 public void run() {
                     int token = DELETE_CONVERSATION_TOKEN;
+                    if (mContext instanceof ConversationList) {
+                        ((ConversationList)mContext).unbindListeners(mThreadIds);
+                    }
                     if (mThreadIds == null) {
                         Conversation.startDeleteAll(mHandler, token, mDeleteLockedMessages);
                         DraftCache.getInstance().refresh();
@@ -755,6 +806,12 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
 
                     // 2. Mark all the conversations as seen.
                     Conversation.markAllConversationsAsSeen(getApplicationContext());
+                }
+                if (mSavedFirstVisiblePosition != AdapterView.INVALID_POSITION) {
+                    // Restore the list to its previous position.
+                    getListView().setSelectionFromTop(mSavedFirstVisiblePosition,
+                            mSavedFirstItemOffset);
+                    mSavedFirstVisiblePosition = AdapterView.INVALID_POSITION;
                 }
                 break;
 
