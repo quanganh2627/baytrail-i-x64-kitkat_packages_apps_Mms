@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -61,14 +60,13 @@ import com.google.android.mms.pdu.PduBody;
 import com.google.android.mms.pdu.PduHeaders;
 import com.google.android.mms.pdu.PduPart;
 import com.google.android.mms.pdu.PduPersister;
-import com.android.mms.UnsupportContentTypeException;
 
 public class SlideshowModel extends Model
         implements List<SlideModel>, IModelChangedObserver {
     private static final String TAG = "Mms/slideshow";
 
     private final LayoutModel mLayout;
-    private final CopyOnWriteArrayList<SlideModel> mSlides;
+    private final ArrayList<SlideModel> mSlides;
     private SMILDocument mDocumentCache;
     private PduBody mPduBodyCache;
     private int mCurrentMessageSize;    // This is the current message size, not including
@@ -81,12 +79,12 @@ public class SlideshowModel extends Model
 
     private SlideshowModel(Context context) {
         mLayout = new LayoutModel();
-        mSlides = new CopyOnWriteArrayList<SlideModel>();
+        mSlides = new ArrayList<SlideModel>();
         mContext = context;
     }
 
     private SlideshowModel (
-            LayoutModel layouts, CopyOnWriteArrayList<SlideModel> slides,
+            LayoutModel layouts, ArrayList<SlideModel> slides,
             SMILDocument documentCache, PduBody pbCache,
             Context context) {
         mLayout = layouts;
@@ -145,7 +143,7 @@ public class SlideshowModel extends Model
         SMILElement docBody = document.getBody();
         NodeList slideNodes = docBody.getChildNodes();
         int slidesNum = slideNodes.getLength();
-        CopyOnWriteArrayList<SlideModel> slides = new CopyOnWriteArrayList<SlideModel>();
+        ArrayList<SlideModel> slides = new ArrayList<SlideModel>(slidesNum);
         int totalMessageSize = 0;
 
         for (int i = 0; i < slidesNum; i++) {
@@ -215,8 +213,6 @@ public class SlideshowModel extends Model
                 } catch (IOException e) {
                     Log.e(TAG, e.getMessage(), e);
                 } catch (IllegalArgumentException e) {
-                    Log.e(TAG, e.getMessage(), e);
-                } catch (UnsupportContentTypeException e) {
                     Log.e(TAG, e.getMessage(), e);
                 }
             }

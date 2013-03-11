@@ -23,7 +23,6 @@ import android.content.ContentUris;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.media.RingtoneManager;
 import android.net.Uri;
@@ -228,12 +227,6 @@ public class SlideEditorActivity extends Activity {
     }
 
     @Override
-    protected void onResume() {
-        mPreview.setEnabled(true);
-        super.onResume();
-    }
-
-    @Override
     protected void onDestroy() {
         super.onDestroy();
 
@@ -335,11 +328,8 @@ public class SlideEditorActivity extends Activity {
     }
 
     private void previewSlideshow() {
-        if (mPreview.isEnabled()) {
-            mPreview.setEnabled(false);
-            MessageUtils.viewMmsMessageAttachment(SlideEditorActivity.this, mUri, mSlideshowModel,
-                    getAsyncDialog());
-        }
+        MessageUtils.viewMmsMessageAttachment(SlideEditorActivity.this, mUri, mSlideshowModel,
+                getAsyncDialog());
     }
 
     private void updateTitle() {
@@ -813,10 +803,4 @@ public class SlideEditorActivity extends Activity {
             setReplaceButtonText(R.string.add_picture);
         }
     }
-
-    @Override
-    public void onConfigurationChanged(Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-    }
-
 }
