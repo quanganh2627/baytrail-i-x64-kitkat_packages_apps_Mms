@@ -230,6 +230,8 @@ public class SlideEditorActivity extends Activity {
     @Override
     protected void onResume() {
         mPreview.setEnabled(true);
+        mReplaceImage.setEnabled(true);
+        mRemoveSlide.setEnabled(true);
         super.onResume();
     }
 
@@ -337,6 +339,8 @@ public class SlideEditorActivity extends Activity {
     private void previewSlideshow() {
         if (mPreview.isEnabled()) {
             mPreview.setEnabled(false);
+            mReplaceImage.setEnabled(false);
+            mRemoveSlide.setEnabled(false);
             MessageUtils.viewMmsMessageAttachment(SlideEditorActivity.this, mUri, mSlideshowModel,
                     getAsyncDialog());
         }
