@@ -85,7 +85,8 @@ public class ManageSimMessages extends Activity
             if (TelephonyIntents.ACTION_SIM_STATE_CHANGED.equals(intent.getAction())) {
                 String stateExtra = intent.getStringExtra(IccCardConstants.INTENT_KEY_ICC_STATE);
                 if (stateExtra != null
-                        && IccCardConstants.INTENT_VALUE_ICC_ABSENT.equals(stateExtra)) {
+                        && ((IccCardConstants.INTENT_VALUE_ICC_ABSENT.equals(stateExtra)
+                        || IccCardConstants.INTENT_VALUE_ICC_UNKNOWN.equals(stateExtra)))) {
                     updateState(SHOW_EMPTY);
                 }
             }
