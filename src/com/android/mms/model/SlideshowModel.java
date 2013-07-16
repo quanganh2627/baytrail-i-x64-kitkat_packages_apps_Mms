@@ -159,6 +159,14 @@ public class SlideshowModel extends Model
             ArrayList<MediaModel> mediaSet = new ArrayList<MediaModel>(mediaNum);
 
             for (int j = 0; j < mediaNum; j++) {
+                if (mediaNodes.item(j) != null) {
+                    String className = mediaNodes.item(j).getClass().getName();
+                    if (className != null
+                            && className.equals("com.android.mms.dom.smil.SmilElementImpl")) {
+                        Log.w(TAG, "Unsupport type mediaNodes.item("+j+"):" + mediaNodes.item(j));
+                        continue;
+                    }
+                }
                 SMILMediaElement sme = (SMILMediaElement) mediaNodes.item(j);
                 try {
                     MediaModel media = MediaModelFactory.getMediaModel(
