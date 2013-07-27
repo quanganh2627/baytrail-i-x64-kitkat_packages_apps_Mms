@@ -293,7 +293,10 @@ public class SlideshowActivity extends Activity implements EventListener {
                 // during tap progress bar continuously,window will leak
                 SeekBar seeker = (SeekBar) mMediaController
                         .findViewById(com.android.internal.R.id.mediacontroller_progress);
-                seeker.setOnSeekBarChangeListener(null);
+                if (seeker != null) {
+                    seeker.setOnSeekBarChangeListener(null);
+                }
+
                 // Must do this so we don't leak a window.
                 mMediaController.hide();
             }
