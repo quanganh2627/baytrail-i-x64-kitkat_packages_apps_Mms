@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -60,13 +61,14 @@ import com.google.android.mms.pdu.PduBody;
 import com.google.android.mms.pdu.PduHeaders;
 import com.google.android.mms.pdu.PduPart;
 import com.google.android.mms.pdu.PduPersister;
+import com.android.mms.UnsupportContentTypeException;
 
 public class SlideshowModel extends Model
         implements List<SlideModel>, IModelChangedObserver {
     private static final String TAG = "Mms/slideshow";
 
     private final LayoutModel mLayout;
-    private final ArrayList<SlideModel> mSlides;
+    private final CopyOnWriteArrayList<SlideModel> mSlides;
     private SMILDocument mDocumentCache;
     private PduBody mPduBodyCache;
     private int mCurrentMessageSize;    // This is the current message size, not including
@@ -79,12 +81,12 @@ public class SlideshowModel extends Model
 
     private SlideshowModel(Context context) {
         mLayout = new LayoutModel();
-        mSlides = new ArrayList<SlideModel>();
+        mSlides = new CopyOnWriteArrayList<SlideModel>();
         mContext = context;
     }
 
     private SlideshowModel (
-            LayoutModel layouts, ArrayList<SlideModel> slides,
+            LayoutModel layouts, CopyOnWriteArrayList<SlideModel> slides,
             SMILDocument documentCache, PduBody pbCache,
             Context context) {
         mLayout = layouts;
@@ -143,7 +145,7 @@ public class SlideshowModel extends Model
         SMILElement docBody = document.getBody();
         NodeList slideNodes = docBody.getChildNodes();
         int slidesNum = slideNodes.getLength();
-        ArrayList<SlideModel> slides = new ArrayList<SlideModel>(slidesNum);
+        CopyOnWriteArrayList<SlideModel> slides = new CopyOnWriteArrayList<SlideModel>();
         int totalMessageSize = 0;
 
         for (int i = 0; i < slidesNum; i++) {
@@ -157,6 +159,14 @@ public class SlideshowModel extends Model
             ArrayList<MediaModel> mediaSet = new ArrayList<MediaModel>(mediaNum);
 
             for (int j = 0; j < mediaNum; j++) {
+                if (mediaNodes.item(j) != null) {
+                    String className = mediaNodes.item(j).getClass().getName();
+                    if (className != null
+                            && className.equals("com.android.mms.dom.smil.SmilElementImpl")) {
+                        Log.w(TAG, "Unsupport type mediaNodes.item("+j+"):" + mediaNodes.item(j));
+                        continue;
+                    }
+                }
                 SMILMediaElement sme = (SMILMediaElement) mediaNodes.item(j);
                 try {
                     MediaModel media = MediaModelFactory.getMediaModel(
@@ -213,6 +223,8 @@ public class SlideshowModel extends Model
                 } catch (IOException e) {
                     Log.e(TAG, e.getMessage(), e);
                 } catch (IllegalArgumentException e) {
+                    Log.e(TAG, e.getMessage(), e);
+                } catch (UnsupportContentTypeException e) {
                     Log.e(TAG, e.getMessage(), e);
                 }
             }
