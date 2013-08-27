@@ -574,10 +574,6 @@ public class MessageUtils {
             mm = slide.getVideo();
         }
 
-        if (mm == null) {
-            return;
-        }
-
         Intent intent = new Intent(Intent.ACTION_VIEW);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.putExtra("SingleItemOnly", true); // So we don't see "surrounding" images in Gallery
@@ -908,7 +904,6 @@ public class MessageUtils {
         // Launch the slideshow activity to play/view.
         Intent intent = new Intent(context, SlideshowActivity.class);
         intent.setData(msgUri);
-        intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         if (requestCode > 0 && context instanceof Activity) {
             ((Activity)context).startActivityForResult(intent, requestCode);
         } else {
@@ -1009,7 +1004,7 @@ public class MessageUtils {
 
         // if we are able to parse the address to a MMS compliant phone number, take that.
         String retVal = parsePhoneNumberForMms(address);
-        if (retVal != null && retVal.length() != 0) {
+        if (retVal != null) {
             return retVal;
         }
 

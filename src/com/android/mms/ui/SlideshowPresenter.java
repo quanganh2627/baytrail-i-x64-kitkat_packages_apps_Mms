@@ -34,7 +34,6 @@ import com.android.mms.model.SlideshowModel;
 import com.android.mms.model.TextModel;
 import com.android.mms.model.VideoModel;
 import com.android.mms.ui.AdaptableSlideViewInterface.OnSizeChangedListener;
-import com.android.mms.ui.SlideListItemView;
 import com.android.mms.util.ItemLoadedCallback;
 
 /**
@@ -201,21 +200,7 @@ public class SlideshowPresenter extends Presenter {
         }
 
         if (dataChanged) {
-            int width = r.getWidth();
-            int height = r.getHeight();
-            if (view instanceof SlideListItemView) {
-                SlideListItemView itemView = (SlideListItemView)view;
-                if (LOCAL_LOGV) {
-                    Log.w(TAG, "getImageMediaWidth:  " + itemView.getImageMediaWidth());
-                    Log.w(TAG, "getImageMediaHeight:  " + itemView.getImageMediaHeight());
-                }
-                if (itemView.getImageMediaWidth() > 0
-                        && itemView.getImageMediaHeight() > 0) {
-                    width = itemView.getImageMediaWidth();
-                    height = itemView.getImageMediaHeight();
-                }
-            }
-            view.setImage(image.getSrc(), image.getBitmap(width, height));
+            view.setImage(image.getSrc(), image.getBitmap(r.getWidth(), r.getHeight()));
         }
 
         if (view instanceof AdaptableSlideViewInterface) {

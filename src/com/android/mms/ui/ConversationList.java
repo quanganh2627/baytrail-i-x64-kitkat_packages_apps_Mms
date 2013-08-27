@@ -315,11 +315,8 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
     protected void onStop() {
         super.onStop();
 
-        stopAsyncQuery();
-
         DraftCache.getInstance().removeOnDraftChangedListener(this);
 
-        unbindListeners(null);
         // Simply setting the choice mode causes the previous choice mode to finish and we exit
         // multi-select mode (if we're in it) and remove all the selections.
         getListView().setChoiceMode(ListView.CHOICE_MODE_MULTIPLE_MODAL);
@@ -332,17 +329,6 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
         }
 
         mListAdapter.changeCursor(null);
-    }
-
-    private void unbindListeners(final Collection<Long> threadIds) {
-        for (int i = 0 ; i < getListView().getChildCount(); i++) {
-            View view = getListView().getChildAt(i);
-            if (view instanceof ConversationListItem
-                    && (threadIds == null
-                    || threadIds.contains(((ConversationListItem)view).getConversation().getThreadId()))) {
-                ((ConversationListItem)view).unbind();
-            }
-        }
     }
 
     @Override
@@ -367,13 +353,6 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
             Conversation.startQuery(mQueryHandler, UNREAD_THREADS_QUERY_TOKEN, Threads.READ + "=0");
         } catch (SQLiteException e) {
             SqliteWrapper.checkSQLiteException(this, e);
-        }
-    }
-
-    private void stopAsyncQuery() {
-        if (mQueryHandler != null) {
-            mQueryHandler.cancelOperation(THREAD_LIST_QUERY_TOKEN);
-            mQueryHandler.cancelOperation(UNREAD_THREADS_QUERY_TOKEN);
         }
     }
 
@@ -733,9 +712,6 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
                 @Override
                 public void run() {
                     int token = DELETE_CONVERSATION_TOKEN;
-                    if (mContext instanceof ConversationList) {
-                        ((ConversationList)mContext).unbindListeners(mThreadIds);
-                    }
                     if (mThreadIds == null) {
                         Conversation.startDeleteAll(mHandler, token, mDeleteLockedMessages);
                         DraftCache.getInstance().refresh();
@@ -834,13 +810,6 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
                 break;
 
             case HAVE_LOCKED_MESSAGES_TOKEN:
-                if (ConversationList.this.isFinishing()) {
-                    Log.w(TAG, "ConversationList is finished, do nothing ");
-                    if (cursor != null) {
-                        cursor.close();
-                    }
-                    return ;
-                }
                 @SuppressWarnings("unchecked")
                 Collection<Long> threadIds = (Collection<Long>)cookie;
                 confirmDeleteThreadDialog(new DeleteThreadListener(threadIds, mQueryHandler,
