@@ -16,12 +16,6 @@
 
 package com.android.mms.util;
 
-import java.io.ByteArrayOutputStream;
-import java.io.Closeable;
-import java.io.FileNotFoundException;
-import java.io.InputStream;
-import java.util.Set;
-
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
@@ -38,6 +32,12 @@ import com.android.mms.R;
 import com.android.mms.TempFileProvider;
 import com.android.mms.ui.UriImage;
 import com.android.mms.util.ImageCacheService.ImageData;
+
+import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
+import java.util.Set;
 
 /**
  * Primary {@link ThumbnailManager} implementation used by {@link MessagingApplication}.
@@ -385,8 +385,14 @@ public class ThumbnailManager extends BackgroundLoaderManager {
             if (options == null) {
                 options = new Options();
             }
-            return ensureGLCompatibleBitmap(
+
+            try {
+                return ensureGLCompatibleBitmap(
                     BitmapFactory.decodeByteArray(bytes, offset, length, options));
+            } catch (OutOfMemoryError e) {
+                Log.e(TAG,"there is no enough memory to decode this large bitmap");
+                return null;
+            }
         }
 
         private Bitmap resizeDownBySideLength(
@@ -460,7 +466,14 @@ public class ThumbnailManager extends BackgroundLoaderManager {
             }
 
             options.inJustDecodeBounds = true;
-            BitmapFactory.decodeStream(inputStream, null, options);
+
+            try {
+                BitmapFactory.decodeStream(inputStream, null, options);
+            } catch (OutOfMemoryError e) {
+                Log.e(TAG,"there is no enough memory to decode this large bitmap");
+                return null;
+            }
+
             closeSilently(inputStream);
 
             // No way to reset the stream. Have to open it again :-(
@@ -475,7 +488,15 @@ public class ThumbnailManager extends BackgroundLoaderManager {
                     options.outWidth, options.outHeight, targetSize);
             options.inJustDecodeBounds = false;
 
-            Bitmap result = BitmapFactory.decodeStream(inputStream, null, options);
+            Bitmap result;
+            try {
+                result = BitmapFactory.decodeStream(inputStream, null, options);
+            } catch (OutOfMemoryError e) {
+                Log.e(TAG,"there is no enough memory to decode this large bitmap");
+                return null;
+            }
+
+
             closeSilently(inputStream);
 
             if (result == null) {
@@ -485,7 +506,14 @@ public class ThumbnailManager extends BackgroundLoaderManager {
             // We need to resize down if the decoder does not support inSampleSize.
             // (For example, GIF images.)
             result = resizeDownIfTooBig(result, targetSize, true);
-            return ensureGLCompatibleBitmap(result);
+            result = ensureGLCompatibleBitmap(result);
+
+            int orientation = UriImage.getOrientation(mContext, uri);
+            // Rotate the bitmap if we need to.
+            if (result != null && orientation != 0) {
+                result = UriImage.rotateBitmap(result, orientation);
+            }
+            return result;
         }
 
         // This computes a sample size which makes the longer side at least
@@ -518,7 +546,6 @@ public class ThumbnailManager extends BackgroundLoaderManager {
             if (scale > 0.5f) return bitmap;
             return resizeBitmapByScale(bitmap, scale, recycle);
         }
-
     }
 
     public static class ImageLoaded {

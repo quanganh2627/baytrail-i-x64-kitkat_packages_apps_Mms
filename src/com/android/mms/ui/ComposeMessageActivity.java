@@ -141,7 +141,6 @@ import com.android.mms.ui.RecipientsEditor.RecipientContextMenuInfo;
 import com.android.mms.util.DraftCache;
 import com.android.mms.util.PhoneNumberFormatter;
 import com.android.mms.util.SendingProgressTokenManager;
-import com.android.mms.util.SmileyParser;
 import com.android.mms.widget.MmsWidgetProvider;
 import com.google.android.mms.ContentType;
 import com.google.android.mms.MmsException;
@@ -209,7 +208,6 @@ public class ComposeMessageActivity extends Activity
     private static final int MENU_SEND_EMAIL            = 23;
     private static final int MENU_COPY_MESSAGE_TEXT     = 24;
     private static final int MENU_COPY_TO_SDCARD        = 25;
-    private static final int MENU_INSERT_SMILEY         = 26;
     private static final int MENU_ADD_ADDRESS_TO_CONTACTS = 27;
     private static final int MENU_LOCK_MESSAGE          = 28;
     private static final int MENU_UNLOCK_MESSAGE        = 29;
@@ -244,7 +242,7 @@ public class ComposeMessageActivity extends Activity
 
     // To reduce janky interaction when message history + draft loads and keyboard opening
     // query the messages + draft after the keyboard opens. This controls that behavior.
-    private static final boolean DEFER_LOADING_MESSAGES_AND_DRAFT = true;
+    private static final boolean DEFER_LOADING_MESSAGES_AND_DRAFT = false;
 
     // The max amount of delay before we force load messages and draft.
     // 500ms is determined empirically. We want keyboard to have a chance to be shown before
@@ -298,8 +296,6 @@ public class ComposeMessageActivity extends Activity
 
     private WorkingMessage mWorkingMessage;         // The message currently being composed.
 
-    private AlertDialog mSmileyDialog;
-
     private boolean mWaitingForSubActivity;
     private int mLastRecipientCount;            // Used for warning the user on too many recipients.
     private AttachmentTypeSelectorAdapter mAttachmentTypeSelectorAdapter;
@@ -337,6 +333,10 @@ public class ComposeMessageActivity extends Activity
     // state of mWorkingMessage. Also, if we are handling a Send or Forward Message Intent,
     // we should not load the draft.
     private boolean mShouldLoadDraft;
+
+    // Whether or not we are currently enabled for SMS. This field is updated in onStart to make
+    // sure we notice if the user has changed the default SMS app.
+    private boolean mIsSmsEnabled;
 
     private Handler mHandler = new Handler();
 
@@ -547,7 +547,8 @@ public class ComposeMessageActivity extends Activity
     private boolean isCursorValid() {
         // Check whether the cursor is valid or not.
         Cursor cursor = mMsgListAdapter.getCursor();
-        if (cursor.isClosed() || cursor.isBeforeFirst() || cursor.isAfterLast()) {
+        if (cursor == null || cursor.isClosed()
+                || cursor.isBeforeFirst() || cursor.isAfterLast()) {
             Log.e(TAG, "Bad cursor.", new RuntimeException());
             return false;
         }
@@ -905,6 +906,9 @@ public class ComposeMessageActivity extends Activity
             Log.e(TAG, "bad menuInfo");
             return;
         }
+        if (info == null) {
+            return;
+        }
         final int position = info.position;
 
         addUriSpecificMenuItems(menu, v, position);
@@ -1078,7 +1082,8 @@ public class ComposeMessageActivity extends Activity
             addCallAndContactMenuItems(menu, l, msgItem);
 
             // Forward is not available for undownloaded messages.
-            if (msgItem.isDownloaded() && (msgItem.isSms() || isForwardable(msgId))) {
+            if (msgItem.isDownloaded() && (msgItem.isSms() || isForwardable(msgId))
+                    && mIsSmsEnabled) {
                 menu.add(0, MENU_FORWARD_MESSAGE, 0, R.string.menu_forward)
                         .setOnMenuItemClickListener(l);
             }
@@ -1124,10 +1129,10 @@ public class ComposeMessageActivity extends Activity
                 }
             }
 
-            if (msgItem.mLocked) {
+            if (msgItem.mLocked && mIsSmsEnabled) {
                 menu.add(0, MENU_UNLOCK_MESSAGE, 0, R.string.menu_unlock)
                     .setOnMenuItemClickListener(l);
-            } else {
+            } else if (mIsSmsEnabled) {
                 menu.add(0, MENU_LOCK_MESSAGE, 0, R.string.menu_lock)
                     .setOnMenuItemClickListener(l);
             }
@@ -1140,8 +1145,10 @@ public class ComposeMessageActivity extends Activity
                         .setOnMenuItemClickListener(l);
             }
 
-            menu.add(0, MENU_DELETE_MESSAGE, 0, R.string.delete_message)
-                .setOnMenuItemClickListener(l);
+            if (mIsSmsEnabled) {
+                menu.add(0, MENU_DELETE_MESSAGE, 0, R.string.delete_message)
+                    .setOnMenuItemClickListener(l);
+            }
         }
     };
 
@@ -1789,6 +1796,7 @@ public class ComposeMessageActivity extends Activity
         mRecipientsPicker.setOnClickListener(this);
 
         mRecipientsEditor.setAdapter(new ChipsRecipientAdapter(this));
+        mRecipientsEditor.setText(null);
         mRecipientsEditor.populate(recipients);
         mRecipientsEditor.setOnCreateContextMenuListener(mRecipientsMenuCreateListener);
         mRecipientsEditor.addTextChangedListener(mRecipientsWatcher);
@@ -1860,6 +1868,7 @@ public class ComposeMessageActivity extends Activity
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        mIsSmsEnabled = MmsConfig.isSmsEnabled(this);
         super.onCreate(savedInstanceState);
 
         resetConfiguration(getResources().getConfiguration());
@@ -1906,6 +1915,7 @@ public class ComposeMessageActivity extends Activity
 
         mSubjectTextEditor.setText(mWorkingMessage.getSubject());
         mSubjectTextEditor.setVisibility(show ? View.VISIBLE : View.GONE);
+        invalidateOptionsMenu();
         hideOrShowTopPanel();
     }
 
@@ -1975,7 +1985,7 @@ public class ComposeMessageActivity extends Activity
             drawBottomPanel();
         }
 
-        onKeyboardStateChanged(mIsKeyboardOpen);
+        onKeyboardStateChanged();
 
         if (Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
             log("update title, mConversation=" + mConversation.toString());
@@ -2110,6 +2120,11 @@ public class ComposeMessageActivity extends Activity
     @Override
     protected void onStart() {
         super.onStart();
+        boolean isSmsEnabled = MmsConfig.isSmsEnabled(this);
+        if (isSmsEnabled != mIsSmsEnabled) {
+            mIsSmsEnabled = isSmsEnabled;
+            invalidateOptionsMenu();
+        }
 
         initFocus();
 
@@ -2244,6 +2259,9 @@ public class ComposeMessageActivity extends Activity
 
         addRecipientsListeners();
 
+        if (mAttachmentEditor != null) {
+            mAttachmentEditor.updateButtonsState(true);
+        }
         if (Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
             log("update title, mConversation=" + mConversation.toString());
         }
@@ -2361,7 +2379,7 @@ public class ComposeMessageActivity extends Activity
             Log.v(TAG, "CMA.onConfigurationChanged: " + newConfig +
                     ", mIsKeyboardOpen=" + mIsKeyboardOpen);
         }
-        onKeyboardStateChanged(mIsKeyboardOpen);
+        onKeyboardStateChanged();
     }
 
     // returns true if landscape/portrait configuration has changed
@@ -2375,10 +2393,20 @@ public class ComposeMessageActivity extends Activity
         return false;
     }
 
-    private void onKeyboardStateChanged(boolean isKeyboardOpen) {
+    private void onKeyboardStateChanged() {
         // If the keyboard is hidden, don't show focus highlights for
         // things that cannot receive input.
-        if (isKeyboardOpen) {
+        mTextEditor.setEnabled(mIsSmsEnabled);
+        if (!mIsSmsEnabled) {
+            if (mRecipientsEditor != null) {
+                mRecipientsEditor.setFocusableInTouchMode(false);
+            }
+            if (mSubjectTextEditor != null) {
+                mSubjectTextEditor.setFocusableInTouchMode(false);
+            }
+            mTextEditor.setFocusableInTouchMode(false);
+            mTextEditor.setHint(R.string.sending_disabled_not_default_app);
+        } else if (mIsKeyboardOpen) {
             if (mRecipientsEditor != null) {
                 mRecipientsEditor.setFocusableInTouchMode(true);
             }
@@ -2637,7 +2665,7 @@ public class ComposeMessageActivity extends Activity
             }
         }
 
-        if (MmsConfig.getMmsEnabled()) {
+        if (MmsConfig.getMmsEnabled() && mIsSmsEnabled) {
             if (!isSubjectEditorVisible()) {
                 menu.add(0, MENU_ADD_SUBJECT, 0, R.string.add_subject).setIcon(
                         R.drawable.ic_menu_edit);
@@ -2650,20 +2678,15 @@ public class ComposeMessageActivity extends Activity
             }
         }
 
-        if (isPreparedForSending()) {
+        if (isPreparedForSending() && mIsSmsEnabled) {
             menu.add(0, MENU_SEND, 0, R.string.send).setIcon(android.R.drawable.ic_menu_send);
-        }
-
-        if (!mWorkingMessage.hasSlideshow()) {
-            menu.add(0, MENU_INSERT_SMILEY, 0, R.string.menu_insert_smiley).setIcon(
-                    R.drawable.ic_menu_emoticons);
         }
 
         if (getRecipients().size() > 1) {
             menu.add(0, MENU_GROUP_PARTICIPANTS, 0, R.string.menu_group_participants);
         }
 
-        if (mMsgListAdapter.getCount() > 0) {
+        if (mMsgListAdapter.getCount() > 0 && mIsSmsEnabled) {
             // Removed search as part of b/1205708
             //menu.add(0, MENU_SEARCH, 0, R.string.menu_search).setIcon(
             //        R.drawable.ic_menu_search);
@@ -2672,7 +2695,7 @@ public class ComposeMessageActivity extends Activity
                 menu.add(0, MENU_DELETE_THREAD, 0, R.string.delete_thread).setIcon(
                     android.R.drawable.ic_menu_delete);
             }
-        } else {
+        } else if (mIsSmsEnabled) {
             menu.add(0, MENU_DISCARD, 0, R.string.discard).setIcon(android.R.drawable.ic_menu_delete);
         }
 
@@ -2748,9 +2771,6 @@ public class ComposeMessageActivity extends Activity
                 break;
             case MENU_CALL_RECIPIENT:
                 dialRecipient();
-                break;
-            case MENU_INSERT_SMILEY:
-                showSmileyDialog();
                 break;
             case MENU_GROUP_PARTICIPANTS:
             {
@@ -3339,7 +3359,7 @@ public class ComposeMessageActivity extends Activity
         CharSequence text = mWorkingMessage.getText();
 
         // TextView.setTextKeepState() doesn't like null input.
-        if (text != null) {
+        if (text != null && mIsSmsEnabled) {
             mTextEditor.setTextKeepState(text);
 
             // Set the edit caret to the end of the text.
@@ -3347,6 +3367,7 @@ public class ComposeMessageActivity extends Activity
         } else {
             mTextEditor.setText("");
         }
+        onKeyboardStateChanged();
     }
 
     private void hideBottomPanel() {
@@ -3362,6 +3383,7 @@ public class ComposeMessageActivity extends Activity
         showSubjectEditor(showSubjectEditor || mWorkingMessage.hasSubject());
 
         invalidateOptionsMenu();
+        onKeyboardStateChanged();
     }
 
     //==========================================================
@@ -3684,9 +3706,10 @@ public class ComposeMessageActivity extends Activity
     private boolean isPreparedForSending() {
         int recipientCount = recipientCount();
 
-        return recipientCount > 0 && recipientCount <= MmsConfig.getRecipientLimit() &&
-            (mWorkingMessage.hasAttachment() ||
-                    mWorkingMessage.hasText() ||
+        return recipientCount > 0 &&
+                recipientCount <= MmsConfig.getRecipientLimit() &&
+                mIsSmsEnabled &&
+                (mWorkingMessage.hasAttachment() || mWorkingMessage.hasText() ||
                     mWorkingMessage.hasSubject());
     }
 
@@ -4078,12 +4101,14 @@ public class ComposeMessageActivity extends Activity
                     int newSelectionPos = -1;
                     long targetMsgId = getIntent().getLongExtra("select_id", -1);
                     if (targetMsgId != -1) {
-                        cursor.moveToPosition(-1);
-                        while (cursor.moveToNext()) {
-                            long msgId = cursor.getLong(COLUMN_ID);
-                            if (msgId == targetMsgId) {
-                                newSelectionPos = cursor.getPosition();
-                                break;
+                        if (cursor != null) {
+                            cursor.moveToPosition(-1);
+                            while (cursor.moveToNext()) {
+                                long msgId = cursor.getLong(COLUMN_ID);
+                                if (msgId == targetMsgId) {
+                                    newSelectionPos = cursor.getPosition();
+                                    break;
+                                }
                             }
                         }
                     } else if (mSavedScrollPosition != -1) {
@@ -4115,7 +4140,7 @@ public class ComposeMessageActivity extends Activity
                     } else {
                         int count = mMsgListAdapter.getCount();
                         long lastMsgId = 0;
-                        if (count > 0) {
+                        if (cursor != null && count > 0) {
                             cursor.moveToLast();
                             lastMsgId = cursor.getLong(COLUMN_ID);
                         }
@@ -4139,7 +4164,8 @@ public class ComposeMessageActivity extends Activity
                     // mSentMessage is true).
                     // Show the recipients editor to give the user a chance to add
                     // more people before the conversation begins.
-                    if (cursor.getCount() == 0 && !isRecipientsEditorVisible() && !mSentMessage) {
+                    if (cursor != null && cursor.getCount() == 0
+                            && !isRecipientsEditorVisible() && !mSentMessage) {
                         initRecipientsEditor();
                     }
 
@@ -4151,6 +4177,13 @@ public class ComposeMessageActivity extends Activity
                     return;
 
                 case ConversationList.HAVE_LOCKED_MESSAGES_TOKEN:
+                    if (ComposeMessageActivity.this.isFinishing()) {
+                        Log.w(TAG, "ComposeMessageActivity is finished, do nothing ");
+                        if (cursor != null) {
+                            cursor.close();
+                        }
+                        return ;
+                    }
                     @SuppressWarnings("unchecked")
                     ArrayList<Long> threadIds = (ArrayList<Long>)cookie;
                     ConversationList.confirmDeleteThreadDialog(
@@ -4247,85 +4280,6 @@ public class ComposeMessageActivity extends Activity
 
             MmsWidgetProvider.notifyDatasetChanged(getApplicationContext());
         }
-    }
-
-    private void showSmileyDialog() {
-        if (mSmileyDialog == null) {
-            int[] icons = SmileyParser.DEFAULT_SMILEY_RES_IDS;
-            String[] names = getResources().getStringArray(
-                    SmileyParser.DEFAULT_SMILEY_NAMES);
-            final String[] texts = getResources().getStringArray(
-                    SmileyParser.DEFAULT_SMILEY_TEXTS);
-
-            final int N = names.length;
-
-            List<Map<String, ?>> entries = new ArrayList<Map<String, ?>>();
-            for (int i = 0; i < N; i++) {
-                // We might have different ASCII for the same icon, skip it if
-                // the icon is already added.
-                boolean added = false;
-                for (int j = 0; j < i; j++) {
-                    if (icons[i] == icons[j]) {
-                        added = true;
-                        break;
-                    }
-                }
-                if (!added) {
-                    HashMap<String, Object> entry = new HashMap<String, Object>();
-
-                    entry. put("icon", icons[i]);
-                    entry. put("name", names[i]);
-                    entry.put("text", texts[i]);
-
-                    entries.add(entry);
-                }
-            }
-
-            final SimpleAdapter a = new SimpleAdapter(
-                    this,
-                    entries,
-                    R.layout.smiley_menu_item,
-                    new String[] {"icon", "name", "text"},
-                    new int[] {R.id.smiley_icon, R.id.smiley_name, R.id.smiley_text});
-            SimpleAdapter.ViewBinder viewBinder = new SimpleAdapter.ViewBinder() {
-                @Override
-                public boolean setViewValue(View view, Object data, String textRepresentation) {
-                    if (view instanceof ImageView) {
-                        Drawable img = getResources().getDrawable((Integer)data);
-                        ((ImageView)view).setImageDrawable(img);
-                        return true;
-                    }
-                    return false;
-                }
-            };
-            a.setViewBinder(viewBinder);
-
-            AlertDialog.Builder b = new AlertDialog.Builder(this);
-
-            b.setTitle(getString(R.string.menu_insert_smiley));
-
-            b.setCancelable(true);
-            b.setAdapter(a, new DialogInterface.OnClickListener() {
-                @Override
-                @SuppressWarnings("unchecked")
-                public final void onClick(DialogInterface dialog, int which) {
-                    HashMap<String, Object> item = (HashMap<String, Object>) a.getItem(which);
-
-                    String smiley = (String)item.get("text");
-                    if (mSubjectTextEditor != null && mSubjectTextEditor.hasFocus()) {
-                        mSubjectTextEditor.append(smiley);
-                    } else {
-                        mTextEditor.append(smiley);
-                    }
-
-                    dialog.dismiss();
-                }
-            });
-
-            mSmileyDialog = b.create();
-        }
-
-        mSmileyDialog.show();
     }
 
     @Override
