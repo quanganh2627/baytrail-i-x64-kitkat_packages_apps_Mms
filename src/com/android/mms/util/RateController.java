@@ -79,7 +79,6 @@ public class RateController {
 
         if (sInstance != null) {
             Log.w(TAG, "Already initialized.");
-            return;
         }
         sInstance = new RateController(context);
     }

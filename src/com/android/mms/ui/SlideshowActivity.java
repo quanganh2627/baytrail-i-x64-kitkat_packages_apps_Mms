@@ -29,14 +29,12 @@ import org.w3c.dom.smil.SMILDocument;
 import org.w3c.dom.smil.SMILElement;
 
 import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
 import android.graphics.PixelFormat;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
-import android.view.ContextThemeWrapper;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -44,7 +42,6 @@ import android.view.View.OnClickListener;
 import android.view.Window;
 import android.widget.MediaController;
 import android.widget.MediaController.MediaPlayerControl;
-import android.widget.SeekBar;
 
 import com.android.mms.R;
 import com.android.mms.dom.AttrImpl;
@@ -241,9 +238,7 @@ public class SlideshowActivity extends Activity implements EventListener {
     }
 
     private void initMediaController() {
-        final Context dialogContext =
-                new ContextThemeWrapper(this, android.R.style.Theme_DeviceDefault);
-        mMediaController = new MediaController(dialogContext, false);
+        mMediaController = new MediaController(SlideshowActivity.this, false);
         mMediaController.setMediaPlayer(new SmilPlayerController(mSmilPlayer));
         mMediaController.setAnchorView(findViewById(R.id.slide_view));
         mMediaController.setPrevNextListeners(
@@ -289,26 +284,10 @@ public class SlideshowActivity extends Activity implements EventListener {
                 mSmilPlayer.stopWhenReload();
             }
             if (mMediaController != null) {
-                // Must set the seek bar change listener null,otherwise if we rotate it
-                // during tap progress bar continuously,window will leak
-                SeekBar seeker = (SeekBar) mMediaController
-                        .findViewById(com.android.internal.R.id.mediacontroller_progress);
-                if (seeker != null) {
-                    seeker.setOnSeekBarChangeListener(null);
-                }
-
                 // Must do this so we don't leak a window.
                 mMediaController.hide();
             }
         }
-    }
-
-    @Override
-    protected void onDestroy() {
-        if (mSlideView != null) {
-            mSlideView.setMediaController(null);
-        }
-        super.onDestroy();
     }
 
     @Override
@@ -323,6 +302,7 @@ public class SlideshowActivity extends Activity implements EventListener {
             case KeyEvent.KEYCODE_DPAD_RIGHT:
                 break;
             case KeyEvent.KEYCODE_BACK:
+            case KeyEvent.KEYCODE_MENU:
                 if ((mSmilPlayer != null) &&
                         (mSmilPlayer.isPausedState()
                         || mSmilPlayer.isPlayingState()

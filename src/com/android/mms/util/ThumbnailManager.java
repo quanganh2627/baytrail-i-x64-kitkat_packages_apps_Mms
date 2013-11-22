@@ -28,7 +28,6 @@ import android.graphics.Bitmap.Config;
 import android.graphics.BitmapFactory;
 import android.graphics.BitmapFactory.Options;
 import android.graphics.Canvas;
-import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
@@ -311,7 +310,6 @@ public class ThumbnailManager extends BackgroundLoaderManager {
 
             UriImage uriImage = new UriImage(mContext, mUri);
             String path = uriImage.getPath();
-            int orientation = uriImage.getOrientation();
 
             if (path == null) {
                 return null;
@@ -349,28 +347,13 @@ public class ThumbnailManager extends BackgroundLoaderManager {
                 }
 
                 bitmap = resizeDownBySideLength(bitmap, THUMBNAIL_TARGET_SIZE, true);
-                bitmap = resetOrientation(bitmap, orientation);
+
                 if (!isTempFile) {
                     byte[] array = compressBitmap(bitmap);
                     cacheService.putImageData(path, TYPE_THUMBNAIL, array);
                 }
                 return bitmap;
             }
-        }
-
-        private Bitmap resetOrientation(Bitmap b, int orientation) {
-            if (orientation != 0 && b != null) {
-                Matrix matrix = new Matrix();
-                matrix.postScale(1, 1);
-                matrix.setRotate(orientation);
-                Bitmap tmp = Bitmap
-                        .createBitmap(b, 0, 0, b.getWidth(), b.getHeight(), matrix, true);
-                if (!b.isRecycled()) {
-                    b.recycle();
-                }
-                b = tmp;
-            }
-            return b;
         }
 
         private Bitmap getVideoBitmap() {
@@ -402,14 +385,8 @@ public class ThumbnailManager extends BackgroundLoaderManager {
             if (options == null) {
                 options = new Options();
             }
-
-            try {
-                return ensureGLCompatibleBitmap(
+            return ensureGLCompatibleBitmap(
                     BitmapFactory.decodeByteArray(bytes, offset, length, options));
-            } catch (OutOfMemoryError e) {
-                Log.e(TAG,"there is no enough memory to decode this large bitmap");
-                return null;
-            }
         }
 
         private Bitmap resizeDownBySideLength(
@@ -483,14 +460,7 @@ public class ThumbnailManager extends BackgroundLoaderManager {
             }
 
             options.inJustDecodeBounds = true;
-
-            try {
-                BitmapFactory.decodeStream(inputStream, null, options);
-            } catch (OutOfMemoryError e) {
-                Log.e(TAG,"there is no enough memory to decode this large bitmap");
-                return null;
-            }
-
+            BitmapFactory.decodeStream(inputStream, null, options);
             closeSilently(inputStream);
 
             // No way to reset the stream. Have to open it again :-(
@@ -505,15 +475,7 @@ public class ThumbnailManager extends BackgroundLoaderManager {
                     options.outWidth, options.outHeight, targetSize);
             options.inJustDecodeBounds = false;
 
-            Bitmap result;
-            try {
-                result = BitmapFactory.decodeStream(inputStream, null, options);
-            } catch (OutOfMemoryError e) {
-                Log.e(TAG,"there is no enough memory to decode this large bitmap");
-                return null;
-            }
-
-
+            Bitmap result = BitmapFactory.decodeStream(inputStream, null, options);
             closeSilently(inputStream);
 
             if (result == null) {

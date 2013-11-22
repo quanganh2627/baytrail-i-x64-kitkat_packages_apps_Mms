@@ -86,7 +86,6 @@ import android.provider.Telephony.Mms;
 import android.provider.Telephony.Sms;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.SmsMessage;
-import android.telephony.TelephonyManager;
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.InputFilter.LengthFilter;
@@ -121,7 +120,6 @@ import android.widget.Toast;
 
 import com.android.internal.telephony.TelephonyIntents;
 import com.android.internal.telephony.TelephonyProperties;
-import com.android.mms.ExceedMessageSizeException;
 import com.android.mms.LogTag;
 import com.android.mms.MmsApp;
 import com.android.mms.MmsConfig;
@@ -246,7 +244,7 @@ public class ComposeMessageActivity extends Activity
 
     // To reduce janky interaction when message history + draft loads and keyboard opening
     // query the messages + draft after the keyboard opens. This controls that behavior.
-    private static final boolean DEFER_LOADING_MESSAGES_AND_DRAFT = false;
+    private static final boolean DEFER_LOADING_MESSAGES_AND_DRAFT = true;
 
     // The max amount of delay before we force load messages and draft.
     // 500ms is determined empirically. We want keyboard to have a chance to be shown before
@@ -549,8 +547,7 @@ public class ComposeMessageActivity extends Activity
     private boolean isCursorValid() {
         // Check whether the cursor is valid or not.
         Cursor cursor = mMsgListAdapter.getCursor();
-        if (cursor == null || cursor.isClosed()
-                || cursor.isBeforeFirst() || cursor.isAfterLast()) {
+        if (cursor.isClosed() || cursor.isBeforeFirst() || cursor.isAfterLast()) {
             Log.e(TAG, "Bad cursor.", new RuntimeException());
             return false;
         }
@@ -907,9 +904,6 @@ public class ComposeMessageActivity extends Activity
         } catch (ClassCastException e) {
             Log.e(TAG, "bad menuInfo");
             return;
-        }
-        if (info == null) {
-           return;
         }
         final int position = info.position;
 
@@ -1795,7 +1789,6 @@ public class ComposeMessageActivity extends Activity
         mRecipientsPicker.setOnClickListener(this);
 
         mRecipientsEditor.setAdapter(new ChipsRecipientAdapter(this));
-        mRecipientsEditor.setText(null);
         mRecipientsEditor.populate(recipients);
         mRecipientsEditor.setOnCreateContextMenuListener(mRecipientsMenuCreateListener);
         mRecipientsEditor.addTextChangedListener(mRecipientsWatcher);
@@ -1913,7 +1906,6 @@ public class ComposeMessageActivity extends Activity
 
         mSubjectTextEditor.setText(mWorkingMessage.getSubject());
         mSubjectTextEditor.setVisibility(show ? View.VISIBLE : View.GONE);
-        invalidateOptionsMenu();
         hideOrShowTopPanel();
     }
 
@@ -2252,9 +2244,6 @@ public class ComposeMessageActivity extends Activity
 
         addRecipientsListeners();
 
-        if (mAttachmentEditor != null) {
-            mAttachmentEditor.updateButtonsState(true);
-        }
         if (Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
             log("update title, mConversation=" + mConversation.toString());
         }
@@ -2638,16 +2627,13 @@ public class ComposeMessageActivity extends Activity
             return true;
         }
 
-        final TelephonyManager tm = (TelephonyManager)getSystemService(Context.TELEPHONY_SERVICE);
-        if (tm != null && tm.isVoiceCapable()) {
-            if (isRecipientCallable()) {
-                MenuItem item = menu.add(0, MENU_CALL_RECIPIENT, 0, R.string.menu_call)
-                    .setIcon(R.drawable.ic_menu_call)
-                    .setTitle(R.string.menu_call);
-                if (!isRecipientsEditorVisible()) {
-                    // If we're not composing a new message, show the call icon in the actionbar
-                    item.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
-                }
+        if (isRecipientCallable()) {
+            MenuItem item = menu.add(0, MENU_CALL_RECIPIENT, 0, R.string.menu_call)
+                .setIcon(R.drawable.ic_menu_call)
+                .setTitle(R.string.menu_call);
+            if (!isRecipientsEditorVisible()) {
+                // If we're not composing a new message, show the call icon in the actionbar
+                item.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
             }
         }
 
@@ -3756,19 +3742,13 @@ public class ComposeMessageActivity extends Activity
             // them back once the recipient list has settled.
             removeRecipientsListeners();
 
-            try {
-                mWorkingMessage.send(mDebugRecipients);
+            mWorkingMessage.send(mDebugRecipients);
 
-                mSentMessage = true;
-                mSendingMessage = true;
-                addRecipientsListeners();
+            mSentMessage = true;
+            mSendingMessage = true;
+            addRecipientsListeners();
 
-                mScrollOnSend = true;   // in the next onQueryComplete, scroll the list to the end.
-            } catch (ExceedMessageSizeException ex) {
-                handleAddAttachmentError(WorkingMessage.MESSAGE_SIZE_EXCEEDED,
-                        R.string.type_picture);
-                return;
-            }
+            mScrollOnSend = true;   // in the next onQueryComplete, scroll the list to the end.
         }
         // But bail out if we are supposed to exit after the message is sent.
         if (mSendDiscreetMode) {
@@ -4171,13 +4151,6 @@ public class ComposeMessageActivity extends Activity
                     return;
 
                 case ConversationList.HAVE_LOCKED_MESSAGES_TOKEN:
-                    if (ComposeMessageActivity.this.isFinishing()) {
-                        Log.w(TAG, "ComposeMessageActivity is finished, do nothing ");
-                        if (cursor != null) {
-                            cursor.close();
-                        }
-                        return ;
-                    }
                     @SuppressWarnings("unchecked")
                     ArrayList<Long> threadIds = (ArrayList<Long>)cookie;
                     ConversationList.confirmDeleteThreadDialog(

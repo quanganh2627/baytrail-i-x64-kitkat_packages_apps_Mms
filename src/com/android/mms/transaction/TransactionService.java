@@ -432,7 +432,7 @@ public class TransactionService extends Service implements Observer {
                             transaction.getConnectionSettings());
                     mServiceHandler.sendMessage(msg);
                 }
-                else if (mProcessing.size() == 0) {
+                else {
                     if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
                         Log.v(TAG, "update: endMmsConnectivity");
                     }
@@ -861,23 +861,11 @@ public class TransactionService extends Service implements Observer {
                     }
                     return true;
                 }
-                // If there is already a transaction in processing list, because of the previous
-                // beginMmsConnectivity call and there is another transaction just at a time,
-                // when the pdp is connected, there will be a case of adding the new transaction
-                // to the Processing list. But Processing list is never traversed to
-                // resend, resulting in transaction not completed/sent.
-                if (mProcessing.size() > 0) {
-                    if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
-                         Log.v(TAG, "Adding transaction to 'mPending' list: " + transaction);
-                    }
-                    mPending.add(transaction);
-                    return true;
-                } else {
-                    if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
-                        Log.v(TAG, "Adding transaction to 'mProcessing' list: " + transaction);
-                    }
-                    mProcessing.add(transaction);
-               }
+
+                if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
+                    Log.v(TAG, "Adding transaction to 'mProcessing' list: " + transaction);
+                }
+                mProcessing.add(transaction);
             }
 
             // Set a timer to keep renewing our "lease" on the MMS connection
