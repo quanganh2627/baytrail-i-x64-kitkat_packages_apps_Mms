@@ -1977,6 +1977,10 @@ public class ComposeMessageActivity extends Activity
             hideRecipientEditor();
         }
 
+        if (mConversation.getMessageCount() == 0 && mConversation.hasDraft()) {
+            initRecipientsEditor();
+        }
+
         updateSendButtonState();
 
         drawTopPanel(false);
