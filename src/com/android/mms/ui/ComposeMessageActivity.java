@@ -242,7 +242,7 @@ public class ComposeMessageActivity extends Activity
 
     // To reduce janky interaction when message history + draft loads and keyboard opening
     // query the messages + draft after the keyboard opens. This controls that behavior.
-    private static final boolean DEFER_LOADING_MESSAGES_AND_DRAFT = true;
+    private static final boolean DEFER_LOADING_MESSAGES_AND_DRAFT = false;
 
     // The max amount of delay before we force load messages and draft.
     // 500ms is determined empirically. We want keyboard to have a chance to be shown before
@@ -547,7 +547,8 @@ public class ComposeMessageActivity extends Activity
     private boolean isCursorValid() {
         // Check whether the cursor is valid or not.
         Cursor cursor = mMsgListAdapter.getCursor();
-        if (cursor.isClosed() || cursor.isBeforeFirst() || cursor.isAfterLast()) {
+        if (cursor == null || cursor.isClosed()
+                || cursor.isBeforeFirst() || cursor.isAfterLast()) {
             Log.e(TAG, "Bad cursor.", new RuntimeException());
             return false;
         }
@@ -903,6 +904,9 @@ public class ComposeMessageActivity extends Activity
             info = (AdapterView.AdapterContextMenuInfo) menuInfo;
         } catch (ClassCastException e) {
             Log.e(TAG, "bad menuInfo");
+            return;
+        }
+        if (info == null) {
             return;
         }
         final int position = info.position;
@@ -1792,6 +1796,7 @@ public class ComposeMessageActivity extends Activity
         mRecipientsPicker.setOnClickListener(this);
 
         mRecipientsEditor.setAdapter(new ChipsRecipientAdapter(this));
+        mRecipientsEditor.setText(null);
         mRecipientsEditor.populate(recipients);
         mRecipientsEditor.setOnCreateContextMenuListener(mRecipientsMenuCreateListener);
         mRecipientsEditor.addTextChangedListener(mRecipientsWatcher);
@@ -1910,6 +1915,7 @@ public class ComposeMessageActivity extends Activity
 
         mSubjectTextEditor.setText(mWorkingMessage.getSubject());
         mSubjectTextEditor.setVisibility(show ? View.VISIBLE : View.GONE);
+        invalidateOptionsMenu();
         hideOrShowTopPanel();
     }
 
@@ -1969,6 +1975,10 @@ public class ComposeMessageActivity extends Activity
             initRecipientsEditor();
         } else {
             hideRecipientEditor();
+        }
+
+        if (mConversation.getMessageCount() == 0 && mConversation.hasDraft()) {
+            initRecipientsEditor();
         }
 
         updateSendButtonState();
@@ -2253,6 +2263,9 @@ public class ComposeMessageActivity extends Activity
 
         addRecipientsListeners();
 
+        if (mAttachmentEditor != null) {
+            mAttachmentEditor.updateButtonsState(true);
+        }
         if (Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
             log("update title, mConversation=" + mConversation.toString());
         }
@@ -4168,6 +4181,13 @@ public class ComposeMessageActivity extends Activity
                     return;
 
                 case ConversationList.HAVE_LOCKED_MESSAGES_TOKEN:
+                    if (ComposeMessageActivity.this.isFinishing()) {
+                        Log.w(TAG, "ComposeMessageActivity is finished, do nothing ");
+                        if (cursor != null) {
+                            cursor.close();
+                        }
+                        return ;
+                    }
                     @SuppressWarnings("unchecked")
                     ArrayList<Long> threadIds = (ArrayList<Long>)cookie;
                     ConversationList.confirmDeleteThreadDialog(
