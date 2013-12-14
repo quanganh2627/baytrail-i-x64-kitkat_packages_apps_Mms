@@ -39,14 +39,6 @@ public abstract class Presenter implements IModelChangedObserver {
         mModel.registerModelChangedObserver(this);
     }
 
-    public void unregisterModelChangedObserver() {
-        mModel.unregisterModelChangedObserver(this);
-    }
-
-    public void registerModelChangedObserver() {
-        mModel.registerModelChangedObserver(this);
-    }
-
     public ViewInterface getView() {
         return mView;
     }

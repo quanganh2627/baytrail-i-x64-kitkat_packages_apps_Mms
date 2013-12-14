@@ -385,14 +385,8 @@ public class ThumbnailManager extends BackgroundLoaderManager {
             if (options == null) {
                 options = new Options();
             }
-
-            try {
-                return ensureGLCompatibleBitmap(
+            return ensureGLCompatibleBitmap(
                     BitmapFactory.decodeByteArray(bytes, offset, length, options));
-            } catch (OutOfMemoryError e) {
-                Log.e(TAG,"there is no enough memory to decode this large bitmap");
-                return null;
-            }
         }
 
         private Bitmap resizeDownBySideLength(
@@ -466,14 +460,7 @@ public class ThumbnailManager extends BackgroundLoaderManager {
             }
 
             options.inJustDecodeBounds = true;
-
-            try {
-                BitmapFactory.decodeStream(inputStream, null, options);
-            } catch (OutOfMemoryError e) {
-                Log.e(TAG,"there is no enough memory to decode this large bitmap");
-                return null;
-            }
-
+            BitmapFactory.decodeStream(inputStream, null, options);
             closeSilently(inputStream);
 
             // No way to reset the stream. Have to open it again :-(
@@ -488,15 +475,7 @@ public class ThumbnailManager extends BackgroundLoaderManager {
                     options.outWidth, options.outHeight, targetSize);
             options.inJustDecodeBounds = false;
 
-            Bitmap result;
-            try {
-                result = BitmapFactory.decodeStream(inputStream, null, options);
-            } catch (OutOfMemoryError e) {
-                Log.e(TAG,"there is no enough memory to decode this large bitmap");
-                return null;
-            }
-
-
+            Bitmap result = BitmapFactory.decodeStream(inputStream, null, options);
             closeSilently(inputStream);
 
             if (result == null) {

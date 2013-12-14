@@ -168,7 +168,6 @@ public class ManageSimMessages extends Activity
         if (mCursor != null) {
             stopManagingCursor(mCursor);
             mCursor.close();
-            mCursor = null;
         }
         startQuery();
     }
