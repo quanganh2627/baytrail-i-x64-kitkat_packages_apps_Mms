@@ -1448,7 +1448,7 @@ public class WorkingMessage {
             slideshow.finalResize(mmsUri);
         } catch (ExceedMessageSizeException e1) {
             error = MESSAGE_SIZE_EXCEEDED;
-        } catch (MmsException e1) {
+        } catch (Exception e1) {
             error = UNKNOWN_ERROR;
         }
         if (error != 0) {
@@ -1456,9 +1456,9 @@ public class WorkingMessage {
             mStatusListener.onAttachmentError(error);
             return;
         }
-        MessageSender sender = new MmsMessageSender(mActivity, mmsUri,
-                slideshow.getCurrentMessageSize());
         try {
+            MessageSender sender = new MmsMessageSender(mActivity, mmsUri,
+                    slideshow.getCurrentMessageSize());
             if (!sender.sendMessage(threadId)) {
                 // The message was sent through SMS protocol, we should
                 // delete the copy which was previously saved in MMS drafts.
