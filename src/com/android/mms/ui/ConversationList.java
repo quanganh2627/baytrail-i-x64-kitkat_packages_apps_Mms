@@ -44,6 +44,7 @@ import android.os.Handler;
 import android.preference.PreferenceManager;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.Contacts;
+import android.provider.Settings;
 import android.provider.Telephony;
 import android.provider.Telephony.Mms;
 import android.provider.Telephony.Threads;
@@ -170,6 +171,11 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
         } else {
             mSavedFirstVisiblePosition = AdapterView.INVALID_POSITION;
             mSavedFirstItemOffset = 0;
+        }
+        String defaultSmsApplication = Telephony.Sms.getDefaultSmsPackage(this);
+        if (defaultSmsApplication == null) {
+            Settings.Secure.putString(getContentResolver(),
+                    Settings.Secure.SMS_DEFAULT_APPLICATION, "com.android.mms");
         }
     }
 
