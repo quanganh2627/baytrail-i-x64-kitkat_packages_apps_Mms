@@ -20,13 +20,16 @@ package com.android.mms.transaction;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SqliteWrapper;
+import android.net.ConnectivityManager;
 import android.net.NetworkUtils;
+import android.net.Uri;
 import android.provider.Telephony;
 import android.text.TextUtils;
 import android.util.Log;
 
 import com.android.internal.telephony.PhoneConstants;
 import com.android.mms.LogTag;
+import com.android.mms.MmsConfig;
 
 /**
  * Container of transaction settings. Instances of this class are contained
@@ -59,6 +62,17 @@ public class TransactionSettings {
      * @param context The context of the MMS Client
      */
     public TransactionSettings(Context context, String apnName) {
+        this(context, apnName, true);
+    }
+
+    public TransactionSettings(Context context, String apnName, boolean onDataSim) {
+        boolean usePrimary = true;
+        ConnectivityManager mgr = (ConnectivityManager)context.getSystemService(
+                Context.CONNECTIVITY_SERVICE);
+        int dataSim = mgr.getDataSim();
+        if ((onDataSim && dataSim == 1) || (!onDataSim && dataSim != 1)) {
+            usePrimary = false;
+        }
         if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
             Log.v(TAG, "TransactionSettings: apnName: " + apnName);
         }
@@ -69,13 +83,19 @@ public class TransactionSettings {
             selectionArgs = new String[]{ apnName.trim() };
         }
 
+        Uri carriersUri = Telephony.Carriers.CONTENT_URI;
+        if (MmsConfig.isDualSimSupported() && !usePrimary) {
+            carriersUri = Telephony.Carriers.CONTENT_URI2;
+        }
+
         Cursor cursor = SqliteWrapper.query(context, context.getContentResolver(),
-                            Telephony.Carriers.CONTENT_URI,
+                            carriersUri,
                             APN_PROJECTION, selection, selectionArgs, null);
 
         if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
             Log.v(TAG, "TransactionSettings looking for apn: " + selection + " returned: " +
-                    (cursor ==null ? "null cursor" : (cursor.getCount() + " hits")));
+                    (cursor ==null ? "null cursor" : (cursor.getCount() + " hits")) +
+                    ", on data sim: " + onDataSim);
         }
 
         if (cursor == null) {
@@ -116,7 +136,8 @@ public class TransactionSettings {
             cursor.close();
         }
 
-        Log.v(TAG, "APN setting: MMSC: " + mServiceCenter + " looked for: " + selection);
+        Log.v(TAG, "APN setting: MMSC: " + mServiceCenter + " looked for: " + selection +
+                ", use primary: " + usePrimary);
 
         if (sawValidApn && TextUtils.isEmpty(mServiceCenter)) {
             Log.e(TAG, "Invalid APN setting: MMSC is empty");

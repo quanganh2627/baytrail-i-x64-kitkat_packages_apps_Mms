@@ -90,6 +90,9 @@ public class RetrieveTransaction extends Transaction implements Runnable {
             throw new IllegalArgumentException(
                     "Initializing from X-Mms-Content-Location is abandoned!");
         }
+        if (MmsConfig.isDualSimSupported()) {
+            mIMSI = loadMessageImsi(context.getContentResolver(), mUri);
+        }
 
         // Attach the transaction to the instance of RetryScheduler.
         attach(RetryScheduler.getInstance(context));
@@ -156,6 +159,9 @@ public class RetrieveTransaction extends Transaction implements Runnable {
                 // Use local time instead of PDU time
                 ContentValues values = new ContentValues(1);
                 values.put(Mms.DATE, System.currentTimeMillis() / 1000L);
+                if (MmsConfig.isDualSimSupported()) {
+                    values.put(Mms_IMSI, mIMSI);
+                }
                 SqliteWrapper.update(mContext, mContext.getContentResolver(),
                         msgUri, values, null, null);
 

@@ -1,4 +1,5 @@
  /*
+
  * Copyright (C) 2009 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -60,6 +61,7 @@ import com.android.mms.model.TextModel;
 import com.android.mms.transaction.MessageSender;
 import com.android.mms.transaction.MmsMessageSender;
 import com.android.mms.transaction.SmsMessageSender;
+import com.android.mms.transaction.Transaction;
 import com.android.mms.ui.ComposeMessageActivity;
 import com.android.mms.ui.MessageUtils;
 import com.android.mms.ui.MessagingPreferenceActivity;
@@ -113,6 +115,7 @@ public class WorkingMessage {
     public static final int MESSAGE_SIZE_EXCEEDED = -2;
     public static final int UNSUPPORTED_TYPE = -3;
     public static final int IMAGE_TOO_LARGE = -4;
+    public static final int FAILED_TO_SEND = -5;
 
     // Attachment types
     public static final int TEXT = 0;
@@ -1174,6 +1177,10 @@ public class WorkingMessage {
      * in mms_config.xml.
      */
     public void send(final String recipientsInUI) {
+        send(recipientsInUI, MmsConfig.DSDS_INVALID_SLOT_ID);
+    }
+
+    public void send(final String recipientsInUI, final int simIndex) {
         long origThreadId = mConversation.getThreadId();
 
         if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
@@ -1188,6 +1195,12 @@ public class WorkingMessage {
         // We need the recipient list for both SMS and MMS.
         final Conversation conv = mConversation;
         String msgTxt = mText.toString();
+        final String imsi;
+        if (MmsConfig.isDualSimSupported()) {
+            imsi = MmsApp.getIMSIBySimId(simIndex);
+        } else {
+            imsi = null;
+        }
 
         if (requiresMms() || addressContainsEmailToMms(conv, msgTxt)) {
             // uaProfUrl setting in mms_config.xml must be present to send an MMS.
@@ -1225,7 +1238,7 @@ public class WorkingMessage {
                     // Make sure the text in slide 0 is no longer holding onto a reference to
                     // the text in the message text box.
                     slideshow.prepareForSend();
-                    sendMmsWorker(conv, mmsUri, persister, slideshow, sendReq, textOnly);
+                    sendMmsWorker(conv, mmsUri, persister, slideshow, sendReq, textOnly, imsi);
 
                     updateSendStats(conv);
                 }
@@ -1236,7 +1249,7 @@ public class WorkingMessage {
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    preSendSmsWorker(conv, msgText, recipientsInUI);
+                    preSendSmsWorker(conv, msgText, recipientsInUI, imsi);
 
                     updateSendStats(conv);
                 }
@@ -1281,7 +1294,7 @@ public class WorkingMessage {
 
     // Message sending stuff
 
-    private void preSendSmsWorker(Conversation conv, String msgText, String recipientsInUI) {
+    private void preSendSmsWorker(Conversation conv, String msgText, String recipientsInUI, String imsi) {
         // If user tries to send the message, it's a signal the inputted text is what they wanted.
         UserHappinessSignals.userAcceptedImeText(mActivity);
 
@@ -1313,14 +1326,14 @@ public class WorkingMessage {
         }else {
             // just do a regular send. We're already on a non-ui thread so no need to fire
             // off another thread to do this work.
-            sendSmsWorker(msgText, semiSepRecipients, threadId);
+            sendSmsWorker(msgText, semiSepRecipients, threadId, imsi);
 
             // Be paranoid and clean any draft SMS up.
             deleteDraftSmsMessage(threadId);
         }
     }
 
-    private void sendSmsWorker(String msgText, String semiSepRecipients, long threadId) {
+    private void sendSmsWorker(String msgText, String semiSepRecipients, long threadId, String imsi) {
         String[] dests = TextUtils.split(semiSepRecipients, ";");
         if (LogTag.VERBOSE || Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
             Log.d(LogTag.TRANSACTION, "sendSmsWorker sending message: recipients=" +
@@ -1328,7 +1341,7 @@ public class WorkingMessage {
         }
         MessageSender sender = new SmsMessageSender(mActivity, dests, msgText, threadId);
         try {
-            sender.sendMessage(threadId);
+            sender.sendMessage(imsi, threadId);
 
             // Make sure this thread isn't over the limits in message count
             Recycler.getSmsRecycler().deleteOldMessagesByThreadId(mActivity, threadId);
@@ -1341,7 +1354,7 @@ public class WorkingMessage {
     }
 
     private void sendMmsWorker(Conversation conv, Uri mmsUri, PduPersister persister,
-            SlideshowModel slideshow, SendReq sendReq, boolean textOnly) {
+            SlideshowModel slideshow, SendReq sendReq, boolean textOnly, String imsi) {
         long threadId = 0;
         Cursor cursor = null;
         boolean newMessage = false;
@@ -1392,6 +1405,9 @@ public class WorkingMessage {
                 values.put(Mms.MESSAGE_TYPE, PduHeaders.MESSAGE_TYPE_SEND_REQ);
                 if (textOnly) {
                     values.put(Mms.TEXT_ONLY, 1);
+                }
+                if (MmsConfig.isDualSimSupported() && !TextUtils.isEmpty(imsi)) {
+                    values.put(Transaction.Mms_IMSI, imsi);
                 }
                 mmsUri = SqliteWrapper.insert(mActivity, mContentResolver, Mms.Outbox.CONTENT_URI,
                         values);
@@ -1450,6 +1466,8 @@ public class WorkingMessage {
             error = MESSAGE_SIZE_EXCEEDED;
         } catch (MmsException e1) {
             error = UNKNOWN_ERROR;
+        } catch (Exception e1) {
+            error = FAILED_TO_SEND;
         }
         if (error != 0) {
             markMmsMessageWithError(mmsUri);
@@ -1459,7 +1477,7 @@ public class WorkingMessage {
         MessageSender sender = new MmsMessageSender(mActivity, mmsUri,
                 slideshow.getCurrentMessageSize());
         try {
-            if (!sender.sendMessage(threadId)) {
+            if (!sender.sendMessage(imsi, threadId)) {
                 // The message was sent through SMS protocol, we should
                 // delete the copy which was previously saved in MMS drafts.
                 SqliteWrapper.delete(mActivity, mContentResolver, mmsUri, null, null);
@@ -1490,6 +1508,8 @@ public class WorkingMessage {
         } catch (MmsException e) {
             // Not much we can do here. If the p.move throws an exception, we'll just
             // leave the message in the draft box.
+            Log.e(TAG, "Failed to move message to outbox and mark as error: " + mmsUri, e);
+        } catch (Exception e) {
             Log.e(TAG, "Failed to move message to outbox and mark as error: " + mmsUri, e);
         }
     }
@@ -1581,6 +1601,12 @@ public class WorkingMessage {
             return res;
         } catch (MmsException e) {
             return null;
+        } catch (IllegalStateException e) {
+            Log.e(TAG,"failed to create draft mms "+ e);
+            return null;
+        } catch (Exception e) {
+            Log.e(TAG, "failed to create draft mms "+ e);
+            return null;
         }
     }
 
@@ -1641,7 +1667,9 @@ public class WorkingMessage {
         try {
             persister.updateParts(uri, pb, preOpenedFiles);
         } catch (MmsException e) {
-            Log.e(TAG, "updateDraftMmsMessage: cannot update message " + uri);
+            Log.e(TAG, "updateDraftMmsMessage: cannot update message " + uri, e);
+        } catch (Exception e) {
+            Log.e(TAG, "updateDraftMmsMessage: cannot update message " + uri, e);
         }
 
         slideshow.sync(pb);

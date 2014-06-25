@@ -47,12 +47,15 @@ import android.provider.Telephony.Sms.Outbox;
 import android.telephony.ServiceState;
 import android.telephony.SmsManager;
 import android.telephony.SmsMessage;
+import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Toast;
 
 import com.android.internal.telephony.TelephonyIntents;
+import com.android.internal.telephony.TelephonyConstants;
 import com.android.mms.LogTag;
+import com.android.mms.MmsApp;
 import com.android.mms.MmsConfig;
 import com.android.mms.R;
 import com.android.mms.data.Contact;
@@ -73,19 +76,31 @@ public class SmsReceiverService extends Service {
 
     private ServiceHandler mServiceHandler;
     private Looper mServiceLooper;
+    private Intent mSendingStateChangedIntent;
     private boolean mSending;
+
+    private boolean mIsDualSimSupported;
 
     public static final String MESSAGE_SENT_ACTION =
         "com.android.mms.transaction.MESSAGE_SENT";
 
+    public static final String MESSAGE_SENDING_STATE_CHANGED_ACTION =
+        "com.android.mms.transaction.MESSAGE_SENDING_STATE_CHANGED";
+
     // Indicates next message can be picked up and sent out.
     public static final String EXTRA_MESSAGE_SENT_SEND_NEXT ="SendNextMsg";
+    // Indicates which SIM is used to sent this message
+    public static final String EXTRA_MESSAGE_SENT_IMSI ="SendImsi";
 
     public static final String ACTION_SEND_MESSAGE =
             "com.android.mms.transaction.SEND_MESSAGE";
     public static final String ACTION_SEND_INACTIVE_MESSAGE =
             "com.android.mms.transaction.SEND_INACTIVE_MESSAGE";
 
+    private static final String TelephonyIntents2_ACTION_SERVICE_STATE_CHANGED =
+        "com.pekall.intent.SERVICE_STATE2";
+
+    private static final String Sms_IMSI = "imsi";
     // This must match the column IDs below.
     private static final String[] SEND_PROJECTION = new String[] {
         Sms._ID,        //0
@@ -93,7 +108,7 @@ public class SmsReceiverService extends Service {
         Sms.ADDRESS,    //2
         Sms.BODY,       //3
         Sms.STATUS,     //4
-
+        Sms_IMSI,       //5
     };
 
     public Handler mToastHandler = new Handler();
@@ -104,6 +119,7 @@ public class SmsReceiverService extends Service {
     private static final int SEND_COLUMN_ADDRESS    = 2;
     private static final int SEND_COLUMN_BODY       = 3;
     private static final int SEND_COLUMN_STATUS     = 4;
+    private static final int SEND_COLUMN_IMSI       = 5;
 
     private int mResultCode;
 
@@ -122,6 +138,7 @@ public class SmsReceiverService extends Service {
 
         mServiceLooper = thread.getLooper();
         mServiceHandler = new ServiceHandler(mServiceLooper);
+        mIsDualSimSupported = MmsConfig.isDualSimSupported();
     }
 
     @Override
@@ -209,11 +226,15 @@ public class SmsReceiverService extends Service {
                 } else if (ACTION_BOOT_COMPLETED.equals(action)) {
                     handleBootCompleted();
                 } else if (TelephonyIntents.ACTION_SERVICE_STATE_CHANGED.equals(action)) {
-                    handleServiceStateChanged(intent);
+                    handleServiceStateChanged(intent, true);
+                } else if (TelephonyIntents2_ACTION_SERVICE_STATE_CHANGED.equals(action)) {
+                    handleServiceStateChanged(intent, false);
                 } else if (ACTION_SEND_MESSAGE.endsWith(action)) {
                     handleSendMessage();
                 } else if (ACTION_SEND_INACTIVE_MESSAGE.equals(action)) {
                     handleSendInactiveMessage();
+                } else if (MESSAGE_SENDING_STATE_CHANGED_ACTION.equals(action)) {
+                    sendBroadcast(intent);
                 }
             }
             // NOTE: We MUST not call stopSelf() directly, since we need to
@@ -222,17 +243,43 @@ public class SmsReceiverService extends Service {
         }
     }
 
-    private void handleServiceStateChanged(Intent intent) {
+    private void handleServiceStateChanged(Intent intent, boolean isPrimary) {
         // If service just returned, start sending out the queued messages
         ServiceState serviceState = ServiceState.newFromBundle(intent.getExtras());
         if (serviceState.getState() == ServiceState.STATE_IN_SERVICE) {
-            sendFirstQueuedMessage();
+            unRegisterForServiceStateChanges(isPrimary);
+            if (mIsDualSimSupported) {
+                handleSendMessage(null);
+            } else {
+                sendFirstQueuedMessage();
+            }
         }
     }
 
     private void handleSendMessage() {
+        String imsi = null;
+        if (mIsDualSimSupported) {
+            // get the latest queued messages from the database
+            final Uri uri = Uri.parse("content://sms/queued");
+            ContentResolver resolver = getContentResolver();
+            Cursor c = SqliteWrapper.query(this, resolver, uri,
+                    SEND_PROJECTION, null, null, "date DESC");
+            if (c != null) {
+                try {
+                    if (c.moveToFirst()) {
+                        imsi = c.getString(SEND_COLUMN_IMSI);
+                    }
+                } finally {
+                    c.close();
+                }
+            }
+        }
+        handleSendMessage(imsi);
+    }
+
+    private void handleSendMessage(String imsi) {
         if (!mSending) {
-            sendFirstQueuedMessage();
+            sendFirstQueuedMessage(imsi);
         }
     }
 
@@ -243,24 +290,71 @@ public class SmsReceiverService extends Service {
     }
 
     public synchronized void sendFirstQueuedMessage() {
+        sendFirstQueuedMessage(null);
+    }
+
+    public synchronized void sendFirstQueuedMessage(String imsi) {
         boolean success = true;
         // get all the queued messages from the database
         final Uri uri = Uri.parse("content://sms/queued");
+        String where = null;
+        String[] whereArgs = null;
+
+        boolean isImsiEmpty = TextUtils.isEmpty(imsi);
+        if (mIsDualSimSupported && !isImsiEmpty) {
+            if (MmsApp.isSecondaryIMSI(imsi)) {
+                where = Sms_IMSI + "=?";
+                whereArgs = new String[] {imsi};
+            } else {
+                String secondaryImsi = MmsApp.getSecondaryIMSI();
+                if (!TextUtils.isEmpty(secondaryImsi)) {
+                    where = Sms_IMSI + "!=?";
+                    whereArgs = new String[] {secondaryImsi};
+                }
+            }
+        }
         ContentResolver resolver = getContentResolver();
         Cursor c = SqliteWrapper.query(this, resolver, uri,
-                        SEND_PROJECTION, null, null, "date ASC");   // date ASC so we send out in
+                SEND_PROJECTION, where, whereArgs, "date ASC");     // date ASC so we send out in
                                                                     // same order the user tried
                                                                     // to send messages.
         if (c != null) {
             try {
-                if (c.moveToFirst()) {
+                while (c.moveToNext()) {
                     String msgText = c.getString(SEND_COLUMN_BODY);
                     String address = c.getString(SEND_COLUMN_ADDRESS);
                     int threadId = c.getInt(SEND_COLUMN_THREAD_ID);
                     int status = c.getInt(SEND_COLUMN_STATUS);
+                    String msgImsi = c.getString(SEND_COLUMN_IMSI);
 
                     int msgId = c.getInt(SEND_COLUMN_ID);
                     Uri msgUri = ContentUris.withAppendedId(Sms.CONTENT_URI, msgId);
+
+                    boolean usePrimarySim = true;
+                    if (mIsDualSimSupported && isImsiEmpty) {
+                        if (MmsApp.isSecondaryIMSI(msgImsi)) {
+                            if (!MmsApp.isSecondarySimReady() || SmsReceiver.isRegisterEnabled(false)) {
+                                if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE) || LogTag.DEBUG_SEND) {
+                                    Log.v(TAG, "Secondary sim is not ready, continue to process next");
+                                }
+                                continue;
+                            }
+                            usePrimarySim = false;
+                        } else {
+                            if (!MmsApp.isPrimarySimReady() || SmsReceiver.isRegisterEnabled(true)) {
+                                if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE) || LogTag.DEBUG_SEND) {
+                                    Log.v(TAG, "Primary sim is not ready, continue to process next");
+                                }
+                                continue;
+                            }
+                        }
+                    } else {
+                        if (mIsDualSimSupported) {
+                            if (MmsApp.isSecondaryIMSI(imsi)) {
+                                usePrimarySim = false;
+                            }
+                        }
+                    }
 
                     SmsMessageSender sender = new SmsSingleRecipientSender(this,
                             address, msgText, threadId, status == Sms.STATUS_PENDING,
@@ -275,11 +369,15 @@ public class SmsReceiverService extends Service {
                     }
 
                     try {
-                        sender.sendMessage(SendingProgressTokenManager.NO_TOKEN);;
+                        MmsApp.setSmsSendingState(usePrimarySim, true);
+                        notifySmsSendingStateChanged();
+                        sender.sendMessage(msgImsi, SendingProgressTokenManager.NO_TOKEN);;
                         mSending = true;
                     } catch (MmsException e) {
                         Log.e(TAG, "sendFirstQueuedMessage: failed to send message " + msgUri
                                 + ", caught ", e);
+                        MmsApp.setSmsSendingState(usePrimarySim, false);
+                        notifySmsSendingStateChanged();
                         mSending = false;
                         messageFailedToSend(msgUri, SmsManager.RESULT_ERROR_GENERIC_FAILURE);
                         success = false;
@@ -290,22 +388,32 @@ public class SmsReceiverService extends Service {
                                 this,
                                 SmsReceiver.class));
                     }
+                    break;
                 }
             } finally {
                 c.close();
             }
         }
-        if (success) {
-            // We successfully sent all the messages in the queue. We don't need to
-            // be notified of any service changes any longer.
-            unRegisterForServiceStateChanges();
+    }
+
+    private void notifySmsSendingStateChanged() {
+        if (mSendingStateChangedIntent == null) {
+            mSendingStateChangedIntent = new Intent(MESSAGE_SENDING_STATE_CHANGED_ACTION);
         }
+        mServiceHandler.removeMessages(0, mSendingStateChangedIntent);
+        Message msg = mServiceHandler.obtainMessage(0, mSendingStateChangedIntent);
+        mServiceHandler.sendMessage(msg);
     }
 
     private void handleSmsSent(Intent intent, int error) {
         Uri uri = intent.getData();
         mSending = false;
         boolean sendNextMsg = intent.getBooleanExtra(EXTRA_MESSAGE_SENT_SEND_NEXT, false);
+        String sendImsi = intent.getStringExtra(EXTRA_MESSAGE_SENT_IMSI);
+        boolean usePrimarySim = !mIsDualSimSupported || !MmsApp.isSecondaryIMSI(sendImsi);
+
+        MmsApp.setSmsSendingState(usePrimarySim, false);
+        notifySmsSendingStateChanged();
 
         if (LogTag.DEBUG_SEND) {
             Log.v(TAG, "handleSmsSent uri: " + uri + " sendNextMsg: " + sendNextMsg +
@@ -321,7 +429,7 @@ public class SmsReceiverService extends Service {
                 Log.e(TAG, "handleSmsSent: failed to move message " + uri + " to sent folder");
             }
             if (sendNextMsg) {
-                sendFirstQueuedMessage();
+                sendFirstQueuedMessage(null);
             }
 
             // Update the notification for failed messages since they may be deleted.
@@ -334,7 +442,7 @@ public class SmsReceiverService extends Service {
             // We got an error with no service or no radio. Register for state changes so
             // when the status of the connection/radio changes, we can try to send the
             // queued up messages.
-            registerForServiceStateChanges();
+            registerForServiceStateChanges(usePrimarySim);
             // We couldn't send the message, put in the queue to retry later.
             Sms.moveMessageToFolder(this, uri, Sms.MESSAGE_TYPE_QUEUED, error);
             mToastHandler.post(new Runnable() {
@@ -370,7 +478,8 @@ public class SmsReceiverService extends Service {
     private void handleSmsReceived(Intent intent, int error) {
         SmsMessage[] msgs = Intents.getMessagesFromIntent(intent);
         String format = intent.getStringExtra("format");
-        Uri messageUri = insertMessage(this, msgs, error, format);
+        String from = intent.getStringExtra(TelephonyConstants.FROM_PHONE);
+        Uri messageUri = insertMessage(this, msgs, error, format, from);
 
         if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE) || LogTag.DEBUG_SEND) {
             SmsMessage sms = msgs[0];
@@ -462,7 +571,7 @@ public class SmsReceiverService extends Service {
      * <code>Uri</code> of the thread containing this message
      * so that we can use it for notification.
      */
-    private Uri insertMessage(Context context, SmsMessage[] msgs, int error, String format) {
+    private Uri insertMessage(Context context, SmsMessage[] msgs, int error, String format, String from) {
         // Build the helper classes to parse the messages.
         SmsMessage sms = msgs[0];
 
@@ -470,9 +579,9 @@ public class SmsReceiverService extends Service {
             displayClassZeroMessage(context, sms, format);
             return null;
         } else if (sms.isReplace()) {
-            return replaceMessage(context, msgs, error);
+            return replaceMessage(context, msgs, error, from);
         } else {
-            return storeMessage(context, msgs, error);
+            return storeMessage(context, msgs, error, from);
         }
     }
 
@@ -485,7 +594,7 @@ public class SmsReceiverService extends Service {
      *
      * See TS 23.040 9.2.3.9.
      */
-    private Uri replaceMessage(Context context, SmsMessage[] msgs, int error) {
+    private Uri replaceMessage(Context context, SmsMessage[] msgs, int error, String from) {
         SmsMessage sms = msgs[0];
         ContentValues values = extractContentValues(sms);
         values.put(Sms.ERROR_CODE, error);
@@ -534,7 +643,7 @@ public class SmsReceiverService extends Service {
                 cursor.close();
             }
         }
-        return storeMessage(context, msgs, error);
+        return storeMessage(context, msgs, error, from);
     }
 
     public static String replaceFormFeeds(String s) {
@@ -544,7 +653,7 @@ public class SmsReceiverService extends Service {
 
 //    private static int count = 0;
 
-    private Uri storeMessage(Context context, SmsMessage[] msgs, int error) {
+    private Uri storeMessage(Context context, SmsMessage[] msgs, int error, String from) {
         SmsMessage sms = msgs[0];
 
         // Store the message in the content provider.
@@ -598,6 +707,20 @@ public class SmsReceiverService extends Service {
         if (((threadId == null) || (threadId == 0)) && (address != null)) {
             threadId = Conversation.getOrCreateThreadId(context, address);
             values.put(Sms.THREAD_ID, threadId);
+        }
+
+        if (MmsConfig.isDualSimSupported()) {
+            TelephonyManager phone = null;
+            // 'GSM' or other value means primary phone
+            if (from == null || !from.equals("GSM2")) {
+                phone = MmsApp.getApplication().getTelephonyManager();
+            } else {
+                // better to use consistent interface to the secondary TM
+                phone = MmsApp.getApplication().getTelephonyManager2();
+            }
+            if (phone != null) {
+                values.put(Sms_IMSI, phone.getSubscriberId());
+            }
         }
 
         ContentResolver resolver = context.getContentResolver();
@@ -667,17 +790,67 @@ public class SmsReceiverService extends Service {
         context.startActivity(smsDialogIntent);
     }
 
-    private void registerForServiceStateChanges() {
+    private void registerForServiceStateChanges(boolean isPrimary) {
         Context context = getApplicationContext();
         unRegisterForServiceStateChanges();
 
         IntentFilter intentFilter = new IntentFilter();
-        intentFilter.addAction(TelephonyIntents.ACTION_SERVICE_STATE_CHANGED);
+        if (mIsDualSimSupported) {
+            SmsReceiver.setRegisterEnabled(isPrimary, true);
+            if (SmsReceiver.isRegisterEnabled(true)) {
+                if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE) || LogTag.DEBUG_SEND) {
+                    Log.i(TAG, ">>> add primary listener");
+                }
+                intentFilter.addAction(TelephonyIntents.ACTION_SERVICE_STATE_CHANGED);
+            }
+            if (SmsReceiver.isRegisterEnabled(false)) {
+                if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE) || LogTag.DEBUG_SEND) {
+                    Log.i(TAG, ">>> add secondary listener");
+                }
+                intentFilter.addAction(TelephonyIntents2_ACTION_SERVICE_STATE_CHANGED);
+            }
+        } else {
+            intentFilter.addAction(TelephonyIntents.ACTION_SERVICE_STATE_CHANGED);
+        }
         if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE) || LogTag.DEBUG_SEND) {
             Log.v(TAG, "registerForServiceStateChanges");
         }
 
         context.registerReceiver(SmsReceiver.getInstance(), intentFilter);
+    }
+
+    private void unRegisterForServiceStateChanges(boolean isPrimary) {
+        unRegisterForServiceStateChanges();
+
+        if (mIsDualSimSupported) {
+            IntentFilter intentFilter = null;
+            SmsReceiver.setRegisterEnabled(isPrimary, false);
+            if (SmsReceiver.isRegisterEnabled(true)) {
+                if (intentFilter == null) {
+                    intentFilter = new IntentFilter();
+                }
+                if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE) || LogTag.DEBUG_SEND) {
+                    Log.i(TAG, ">>> add primary listener");
+                }
+                intentFilter.addAction(TelephonyIntents.ACTION_SERVICE_STATE_CHANGED);
+            }
+            if (SmsReceiver.isRegisterEnabled(false)) {
+                if (intentFilter == null) {
+                    intentFilter = new IntentFilter();
+                }
+                if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE) || LogTag.DEBUG_SEND) {
+                    Log.i(TAG, ">>> add secondary listener");
+                }
+                intentFilter.addAction(TelephonyIntents2_ACTION_SERVICE_STATE_CHANGED);
+            }
+            if (intentFilter != null) {
+                if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE) || LogTag.DEBUG_SEND) {
+                    Log.v(TAG, "registerForServiceStateChanges");
+                }
+                Context context = getApplicationContext();
+                context.registerReceiver(SmsReceiver.getInstance(), intentFilter);
+            }
+        }
     }
 
     private void unRegisterForServiceStateChanges() {

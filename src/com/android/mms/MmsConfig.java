@@ -30,6 +30,7 @@ import android.provider.Telephony;
 import android.text.TextUtils;
 import android.util.Log;
 
+import com.android.internal.telephony.TelephonyConstants;
 import com.android.internal.telephony.TelephonyProperties;
 import com.android.mms.ui.MessageUtils;
 import com.android.mms.ui.MessagingPreferenceActivity;
@@ -38,6 +39,11 @@ public class MmsConfig {
     private static final String TAG = "MmsConfig";
     private static final boolean DEBUG = true;
     private static final boolean LOCAL_LOGV = false;
+
+    public static final int DSDS_INVALID_SLOT_ID = TelephonyConstants.DSDS_INVALID_SLOT_ID;
+    public static final int DSDS_SLOT_1_ID = TelephonyConstants.DSDS_SLOT_1_ID;
+    public static final int DSDS_SLOT_2_ID = TelephonyConstants.DSDS_SLOT_2_ID;
+    public static final String EXTRA_SLOT = TelephonyConstants.EXTRA_SLOT;
 
     private static final String DEFAULT_HTTP_KEY_X_WAP_PROFILE = "x-wap-profile";
     private static final String DEFAULT_USER_AGENT = "Android-Mms/2.0";
@@ -111,6 +117,8 @@ public class MmsConfig {
     // If mEnableGroupMms is false, the group MMS setting/preference will be hidden in the settings
     // activity.
     private static boolean mEnableGroupMms = true;
+
+    private static boolean mSecondaryDownloadMmsManual = false;
 
     public static void init(Context context) {
         if (LOCAL_LOGV) {
@@ -290,6 +298,10 @@ public class MmsConfig {
         return mEnableGroupMms;
     }
 
+    public static boolean getSecondaryDownloadMmsManual() {
+        return mSecondaryDownloadMmsManual;
+    }
+
     public static final void beginDocument(XmlPullParser parser, String firstElementName) throws XmlPullParserException, IOException
     {
         int type;
@@ -418,6 +430,12 @@ public class MmsConfig {
                             mHttpParamsLine1Key = text;
                         } else if ("emailGatewayNumber".equalsIgnoreCase(value)) {
                             mEmailGateway = text;
+                        } else if ("secondary_sim_mms_download_policy".equalsIgnoreCase(value)) {
+                            if ("always_manual".equalsIgnoreCase(text)) {
+                                mSecondaryDownloadMmsManual = true;
+                            } else if ("follow_preference".equalsIgnoreCase(text)) {
+                                mSecondaryDownloadMmsManual = false;
+                            }
                         }
                     }
                 }
@@ -446,4 +464,7 @@ public class MmsConfig {
         }
     }
 
+    public static boolean isDualSimSupported() {
+        return TelephonyConstants.IS_DSDS;
+    }
 }

@@ -883,6 +883,7 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
             switch (token) {
             case THREAD_LIST_QUERY_TOKEN:
                 mListAdapter.changeCursor(cursor);
+                invalidateOptionsMenu();
 
                 if (mListAdapter.getCount() == 0) {
                     ((TextView)(getListView().getEmptyView())).setText(R.string.no_conversations);
@@ -932,6 +933,9 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
 
             default:
                 Log.e(TAG, "onQueryComplete called with unknown token " + token);
+                if (cursor != null) {
+                    cursor.close();
+                }
             }
         }
 

@@ -17,6 +17,8 @@
 
 package com.android.mms.util;
 
+import java.util.HashSet;
+
 import android.content.BroadcastReceiver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -58,11 +60,13 @@ public class DownloadManager {
     public static final int STATE_TRANSIENT_FAILURE = 0x82;
     public static final int STATE_PERMANENT_FAILURE = 0x87;
     public static final int STATE_PRE_DOWNLOADING   = 0x88;
+    public static final int STATE_STARTING          = 0x01;
 
     private final Context mContext;
     private final Handler mHandler;
     private final SharedPreferences mPreferences;
     private boolean mAutoDownload;
+    private HashSet<Uri> mStartingUris;
 
     private final OnSharedPreferenceChangeListener mPreferencesChangeListener =
         new OnSharedPreferenceChangeListener() {
@@ -120,6 +124,7 @@ public class DownloadManager {
                 new IntentFilter(TelephonyIntents.ACTION_SERVICE_STATE_CHANGED));
 
         mAutoDownload = getAutoDownloadState(mPreferences);
+        mStartingUris = new HashSet<Uri>();
         if (LOCAL_LOGV) {
             Log.v(TAG, "mAutoDownload ------> " + mAutoDownload);
         }
@@ -185,6 +190,7 @@ public class DownloadManager {
     }
 
     public void markState(final Uri uri, int state) {
+        mStartingUris.remove(uri);
         // Notify user if the message has expired.
         try {
             NotificationInd nInd = (NotificationInd) PduPersister.getPduPersister(mContext)
@@ -272,5 +278,13 @@ public class DownloadManager {
             }
         }
         return STATE_UNSTARTED;
+    }
+
+    public void markStateAsStarting(Uri uri) {
+        mStartingUris.add(uri);
+    }
+
+    public boolean isInStartingState(Uri uri) {
+        return mStartingUris.contains(uri);
     }
 }

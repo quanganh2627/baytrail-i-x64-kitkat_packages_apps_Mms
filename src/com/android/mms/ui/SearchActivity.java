@@ -65,6 +65,7 @@ public class SearchActivity extends ListActivity
     // appropriately when the Contact gets fully loaded.
     private HashMap<Contact, TextView> mContactMap = new HashMap<Contact, TextView>();
 
+    private CursorAdapter mListAdapter; //ref
 
     /*
      * Subclass of TextView which displays a snippet of text which matches the full text and
@@ -202,6 +203,14 @@ public class SearchActivity extends ListActivity
         Contact.removeListener(mContactListener);
     }
 
+    @Override
+    public void onDestroy() { //ref
+        super.onDestroy();
+        if (mListAdapter != null) {
+            mListAdapter.changeCursor(null);
+        }
+    }
+
     private long getThreadId(long sourceId, long which) {
         Uri.Builder b = Uri.parse("content://mms-sms/messageIdToThread").buildUpon();
         b = b.appendQueryParameter("row_id", String.valueOf(sourceId));
@@ -308,7 +317,7 @@ public class SearchActivity extends ListActivity
                 // Note that we're telling the CursorAdapter not to do auto-requeries. If we
                 // want to dynamically respond to changes in the search results,
                 // we'll have have to add a setOnDataSetChangedListener().
-                setListAdapter(new CursorAdapter(SearchActivity.this,
+                setListAdapter(mListAdapter = new CursorAdapter(SearchActivity.this,
                         c, false /* no auto-requery */) {
                     @Override
                     public void bindView(View view, Context context, Cursor cursor) {

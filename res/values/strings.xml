@@ -607,7 +607,7 @@
     <!-- Dialog box message text when failure occurs sending a message. -->
     <string name="message_failed_body">Touch to review the message and try again.</string>
     <!-- Dialog box message when there's a problem retrieving messages. -->
-    <string name="download_later">Can\'t download right now. Try again later.</string>
+    <string name="download_later">Can\'t download or send right now. Try again later.</string>
     <!-- Dialog box message when there's no APN specified on the device. -->
     <string name="no_apn">No APN specified on the device.</string>
 
@@ -800,5 +800,32 @@
     <string name="banner_sms_promo_title_initial">Messaging is not your SMS app</string>
     <string name="banner_sms_promo_title_application"><xliff:g id="appName">%s</xliff:g> is your SMS app</string>
     <string name="banner_sms_promo_message">You can change this in Settings</string>
+
+    <!-- Strings added by Pekall -->
+    <!-- Error message indicating that the message send failed -->
+    <string name="failed_to_send">Failed to send this message</string>
+
+    <!-- The two send button in composer -->
+    <string name="send_sim1">Send 1</string>
+    <string name="send_sim2">Send 2</string>
+    <string name="mms_send_sim1">MMS Send 1</string>
+    <string name="mms_send_sim2">MMS Send 2</string>
+
+    <!-- preference for manage sim 1 messages -->
+    <string name="pref_title_manage_sim1_messages">Manage SIM card 1 messages</string>
+    <string name="pref_title_manage_sim2_messages">Manage SIM card 2 messages</string>
+
+    <!-- Title of screen displaying messages on SIM card 1-->
+    <string name="sim1_manage_messages_title">Text messages on SIM card 1</string>
+    <!-- Title of screen displaying messages on SIM card 2-->
+    <string name="sim2_manage_messages_title">Text messages on SIM card 2</string>
+
+    <!-- Sim Full Notification title for DSDS -->
+    <string name="sim1_full_title">SIM card 1 full</string>
+    <string name="sim2_full_title">SIM card 2 full</string>
+
+    <string name="network_not_available">Network is not available</string>
+    <string name="starting">Starting</string>
+    <string name="failed_to_resize_message">Your message couldn\'t be sent, please re-edit it.</string>
 
 </resources>

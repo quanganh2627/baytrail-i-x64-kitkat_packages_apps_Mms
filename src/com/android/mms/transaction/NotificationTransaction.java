@@ -35,6 +35,7 @@ import android.provider.Telephony.Mms;
 import android.provider.Telephony.Threads;
 import android.provider.Telephony.Mms.Inbox;
 import android.telephony.TelephonyManager;
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.android.mms.MmsApp;
@@ -94,6 +95,9 @@ public class NotificationTransaction extends Transaction implements Runnable {
 
         mContentLocation = new String(mNotificationInd.getContentLocation());
         mId = mContentLocation;
+        if (MmsConfig.isDualSimSupported()) {
+            mIMSI = loadMessageImsi(context.getContentResolver(), mUri);
+        }
 
         // Attach the transaction to the instance of RetryScheduler.
         attach(RetryScheduler.getInstance(context));
@@ -189,6 +193,12 @@ public class NotificationTransaction extends Transaction implements Runnable {
                     // Use local time instead of PDU time
                     ContentValues values = new ContentValues(1);
                     values.put(Mms.DATE, System.currentTimeMillis() / 1000L);
+                    // also record info of SIM of which this mms coming from,
+                    // because the data network only can be enabled for primary SIM,
+                    // so it must be the one we are coming
+                    if (MmsConfig.isDualSimSupported() && !TextUtils.isEmpty(mIMSI)) {
+                        values.put(Mms_IMSI, mIMSI);
+                    }
                     SqliteWrapper.update(mContext, mContext.getContentResolver(),
                             uri, values, null, null);
 

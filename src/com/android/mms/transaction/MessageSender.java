@@ -31,4 +31,15 @@ public interface MessageSender {
      * @throws MmsException Error occurred while sending the message.
      */
     boolean sendMessage(long token) throws MmsException;
+
+    /**
+     * Send the message through MMS or SMS protocol (used in DSDS mode).
+     * @param imsi The IMSI indicates which SIM should be used.
+     * @param token The token to identify the sending progress.
+     *
+     * @return True if the message was sent through MMS or false if it was
+     *         sent through SMS.
+     * @throws MmsException Error occurred while sending the message.
+     */
+    boolean sendMessage(String imsi, long token) throws MmsException;
 }

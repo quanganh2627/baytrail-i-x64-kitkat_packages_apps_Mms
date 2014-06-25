@@ -21,10 +21,16 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
+import android.database.Cursor;
 import android.net.ConnectivityManager;
 import android.net.Uri;
+import android.util.Log;
 
+import com.android.mms.MmsApp;
+import com.android.mms.MmsConfig;
 import com.android.mms.util.SendingProgressTokenManager;
 import com.google.android.mms.MmsException;
 
@@ -40,6 +46,13 @@ public abstract class Transaction extends Observable {
     protected String mId;
     protected TransactionState mTransactionState;
     protected TransactionSettings mTransactionSettings;
+    protected String mIMSI;
+
+    public static final String Mms_IMSI = "imsi";
+
+    static final String[] IMSI_PROJECTION = new String[] {
+        Mms_IMSI
+    };
 
     /**
      * Identifies push requests.
@@ -64,6 +77,7 @@ public abstract class Transaction extends Observable {
         mTransactionState = new TransactionState();
         mServiceId = serviceId;
         mTransactionSettings = settings;
+        mIMSI = null;
     }
 
     /**
@@ -89,6 +103,19 @@ public abstract class Transaction extends Observable {
      * @return true if transaction is equivalent to this instance, false otherwise.
      */
     public boolean isEquivalent(Transaction transaction) {
+        /*
+        int typeLeft = getType();
+        int typeRight = transaction.getType();
+
+        // Notification transaction does the same thing as Retrieve transaction
+        if ((typeLeft == NOTIFICATION_TRANSACTION || typeLeft == RETRIEVE_TRANSACTION)
+                && (typeRight == NOTIFICATION_TRANSACTION || typeRight == RETRIEVE_TRANSACTION)) {
+            return mId.equals(transaction.mId);
+        }
+        // fall back
+        return getClass().equals(transaction.getClass())
+                && mId.equals(transaction.mId);
+        */
         return mId.equals(transaction.mId);
     }
 
@@ -98,6 +125,14 @@ public abstract class Transaction extends Observable {
      */
     public int getServiceId() {
         return mServiceId;
+    }
+
+    /**
+     * Get the imsi of SIM card which this transaction would run with.
+     * @return the IMSI of proposed SIM Card
+     */
+    public String getIMSI() {
+        return mIMSI;
     }
 
     public TransactionSettings getConnectionSettings() {
@@ -211,6 +246,11 @@ public abstract class Transaction extends Observable {
                 (ConnectivityManager) mContext.getSystemService(Context.CONNECTIVITY_SERVICE);
 
         InetAddress inetAddr;
+        int type = ConnectivityManager.TYPE_MOBILE_MMS;
+        if (MmsConfig.isDualSimSupported() && !MmsApp.isOnDataSim(connMgr, mIMSI)) {
+            type = ConnectivityManager.TYPE_MOBILE2_MMS;
+        }
+
         if (settings.isProxySet()) {
             String proxyAddr = settings.getProxyAddress();
             try {
@@ -219,7 +259,7 @@ public abstract class Transaction extends Observable {
                 throw new IOException("Cannot establish route for " + url +
                                       ": Unknown proxy " + proxyAddr);
             }
-            if (!connMgr.requestRouteToHostAddress(ConnectivityManager.TYPE_MOBILE_MMS, inetAddr)) {
+            if (!connMgr.requestRouteToHostAddress(type, inetAddr)) {
                 throw new IOException("Cannot establish route to proxy " + inetAddr);
             }
         } else {
@@ -229,11 +269,38 @@ public abstract class Transaction extends Observable {
             } catch (UnknownHostException e) {
                 throw new IOException("Cannot establish route for " + url + ": Unknown host");
             }
-            if (!connMgr.requestRouteToHostAddress(ConnectivityManager.TYPE_MOBILE_MMS, inetAddr)) {
+            if (!connMgr.requestRouteToHostAddress(type, inetAddr)) {
                 throw new IOException("Cannot establish route to " + inetAddr + " for " + url);
             }
         }
     }
+	
+	// kk_ignore, this is not in original kk
+    /**
+     * Look up a host name and return the result as an int. Works if the argument
+     * is an IP address in dot notation. Obviously, this can only be used for IPv4
+     * addresses.
+     * @param hostname the name of the host (or the IP address)
+     * @return the IP address as an {@code int} in network byte order
+     *
+    // TODO: move this to android-common
+    public static int lookupHost(String hostname) {
+        InetAddress inetAddress;
+        try {
+            inetAddress = InetAddress.getByName(hostname);
+        } catch (UnknownHostException e) {
+            return -1;
+        }
+        byte[] addrBytes;
+        int addr;
+        addrBytes = inetAddress.getAddress();
+        addr = ((addrBytes[3] & 0xff) << 24)
+                | ((addrBytes[2] & 0xff) << 16)
+                | ((addrBytes[1] & 0xff) << 8)
+                |  (addrBytes[0] & 0xff);
+        return addr;
+    }
+    */
 
     @Override
     public String toString() {
@@ -246,4 +313,34 @@ public abstract class Transaction extends Observable {
      * @return Transaction type in integer.
      */
     abstract public int getType();
+
+    /**
+     * read IMSI of specified mms uri from database
+     * @return IMSI of SIM Card of this mms message is going to be sent/received from
+     */
+    public static String loadMessageImsi(ContentResolver resolver, Uri uri) {
+        String imsi = null;
+        Cursor cursor = resolver.query(uri, IMSI_PROJECTION, null, null, null);
+        if (cursor != null) {
+            try {
+                if (cursor.moveToFirst()) {
+                    imsi = cursor.getString(0);
+                }
+            } finally {
+                cursor.close();
+            }
+        }
+
+        return imsi;
+    }
+
+    /**
+     * fill the SIM Card info from which this mms is sent/received.
+     */
+    public static void updateMessageImsi(ContentResolver resolver, Uri uri, String imsi) {
+        ContentValues values = new ContentValues(1);
+        values.put(Mms_IMSI, imsi);
+
+        resolver.update(uri, values, null, null);
+    }
 }

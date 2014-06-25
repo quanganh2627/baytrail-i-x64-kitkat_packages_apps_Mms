@@ -1,8 +1,25 @@
+/*
+ * Copyright (C) 2008 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.android.mms.transaction;
 
 import java.util.ArrayList;
 
 import android.app.PendingIntent;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -13,6 +30,7 @@ import android.telephony.SmsManager;
 import android.util.Log;
 
 import com.android.mms.LogTag;
+import com.android.mms.MmsApp;
 import com.android.mms.MmsConfig;
 import com.android.mms.data.Conversation;
 import com.android.mms.ui.MessageUtils;
@@ -34,6 +52,10 @@ public class SmsSingleRecipientSender extends SmsMessageSender {
     }
 
     public boolean sendMessage(long token) throws MmsException {
+        return sendMessage(null, token);
+    }
+
+    public boolean sendMessage(String imsi, long token) throws MmsException {
         if (LogTag.DEBUG_SEND) {
             Log.v(TAG, "sendMessage token: " + token);
         }
@@ -42,7 +64,9 @@ public class SmsSingleRecipientSender extends SmsMessageSender {
             // one.
             throw new MmsException("Null message body or have multiple destinations.");
         }
-        SmsManager smsManager = SmsManager.getDefault();
+        boolean isDualSimSupported = MmsConfig.isDualSimSupported();
+        boolean usePrimarySim = !isDualSimSupported || !MmsApp.isSecondaryIMSI(imsi);
+        SmsManager smsManager = usePrimarySim ? SmsManager.getDefault() : MmsApp.getSmsManager2();
         ArrayList<String> messages = null;
         if ((MmsConfig.getEmailGateway() != null) &&
                 (Mms.isEmailAddress(mDest) || MessageUtils.isAlias(mDest))) {
@@ -107,6 +131,9 @@ public class SmsSingleRecipientSender extends SmsMessageSender {
                 requestCode = 1;
                 intent.putExtra(SmsReceiverService.EXTRA_MESSAGE_SENT_SEND_NEXT, true);
             }
+            if (isDualSimSupported) {
+                intent.putExtra(SmsReceiverService.EXTRA_MESSAGE_SENT_IMSI, imsi);
+            }
             if (LogTag.DEBUG_SEND) {
                 Log.v(TAG, "sendMessage sendIntent: " + intent);
             }
@@ -114,6 +141,14 @@ public class SmsSingleRecipientSender extends SmsMessageSender {
         }
         try {
             smsManager.sendMultipartTextMessage(mDest, mServiceCenter, messages, sentIntents, deliveryIntents);
+
+            // use primary SIM when imsi is empty or absent, e.g. the old SIM Card is absent
+            // update IMSI if specified IMSI absent
+            if (isDualSimSupported && usePrimarySim && !MmsApp.isPrimaryIMSI(imsi)) {
+                ContentValues values = new ContentValues(1);
+                values.put(Sms_IMSI, MmsApp.getApplication().getTelephonyManager().getSubscriberId());
+                mContext.getContentResolver().update(mUri, values, null, null);
+            }
         } catch (Exception ex) {
             Log.e(TAG, "SmsMessageSender.sendMessage: caught", ex);
             throw new MmsException("SmsMessageSender.sendMessage: caught " + ex +

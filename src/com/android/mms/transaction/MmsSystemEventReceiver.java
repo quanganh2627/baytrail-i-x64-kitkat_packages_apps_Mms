@@ -20,14 +20,21 @@ package com.android.mms.transaction;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
 import android.provider.Telephony.Mms;
 import android.util.Log;
+import com.android.internal.telephony.TelephonyConstants;
+import com.android.internal.telephony.TelephonyIntents;
+import com.android.internal.telephony.TelephonyIntents2;
+
+import com.android.internal.telephony.PhoneConstants;
 
 import com.android.mms.LogTag;
 import com.android.mms.MmsApp;
+import com.android.mms.MmsConfig;
 
 /**
  * MmsSystemEventReceiver receives the
@@ -44,6 +51,11 @@ public class MmsSystemEventReceiver extends BroadcastReceiver {
     private static final String TAG = "MmsSystemEventReceiver";
     private static ConnectivityManager mConnMgr = null;
 
+    public static final String TelephonyIntents2_ACTION_ANY_DATA_CONNECTION_STATE_CHANGED =
+            "com.pekall.intent.ANY_DATA_STATE2";
+
+    private static MmsSystemEventReceiver sMmsSystemEventReceiver;
+    private static MmsSystemEventReceiver sMmsSystemEventReceiver2;
     public static void wakeUpService(Context context) {
         if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
             Log.v(TAG, "wakeUpService: start transaction service ...");
@@ -87,6 +99,29 @@ public class MmsSystemEventReceiver extends BroadcastReceiver {
             if (available && !isConnected) {
                 wakeUpService(context);
             }
+/*        } else if (action.equals(TelephonyIntents.ACTION_ANY_DATA_CONNECTION_STATE_CHANGED)) {
+            String state = intent.getStringExtra(PhoneConstants.STATE_KEY);
+
+            if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
+                Log.v(TAG, "ANY_DATA_STATE event received: " + state);
+            }
+
+            if (state.equals("CONNECTED")) {
+                wakeUpService(context);
+            }  */
+        } else if (action.equals(TelephonyIntents2_ACTION_ANY_DATA_CONNECTION_STATE_CHANGED)) {
+            // Secondary SIM is always DISCONNECTED before enable network on it
+            // so cannot depends on the state as above
+            boolean netavailable = ! intent.getBooleanExtra(PhoneConstants.NETWORK_UNAVAILABLE_KEY, false);
+            String apn = intent.getStringExtra(PhoneConstants.DATA_APN_TYPE_KEY);
+
+            if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
+                Log.v(TAG, "ANY_DATA_STATE2 event received: " + netavailable + " for apn type " + apn);
+            }
+
+            if (netavailable && PhoneConstants.APN_TYPE_MMS.equals(apn)) {
+                wakeUpService(context);
+            }
         } else if (action.equals(Intent.ACTION_BOOT_COMPLETED)) {
             // We should check whether there are unread incoming
             // messages in the Inbox and then update the notification icon.
@@ -97,6 +132,70 @@ public class MmsSystemEventReceiver extends BroadcastReceiver {
             // Scan and send pending Mms once after boot completed since
             // ACTION_ANY_DATA_CONNECTION_STATE_CHANGED wasn't registered in a whole life cycle
             wakeUpService(context);
+        }
+    }
+	/*
+    // kk_ignore (these methods are not from kk iteself)
+    public static void registerForConnectionStateChanges(Context context) {
+        unRegisterForConnectionStateChanges(context);
+
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(TelephonyIntents.ACTION_ANY_DATA_CONNECTION_STATE_CHANGED);
+        if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
+            Log.v(TAG, "registerForConnectionStateChanges");
+        }
+        if (sMmsSystemEventReceiver == null) {
+            sMmsSystemEventReceiver = new MmsSystemEventReceiver();
+        }
+
+        context.registerReceiver(sMmsSystemEventReceiver, intentFilter);
+    }
+
+    public static void unRegisterForConnectionStateChanges(Context context) {
+        if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
+            Log.v(TAG, "unRegisterForConnectionStateChanges");
+        }
+        if (sMmsSystemEventReceiver != null) {
+            try {
+                context.unregisterReceiver(sMmsSystemEventReceiver);
+            } catch (IllegalArgumentException e) {
+                // Allow un-matched register-unregister calls
+            }
+        }
+    }
+    */
+    public static void registerForConnectionStateChanges2(Context context) {
+        if (!MmsConfig.isDualSimSupported()) {
+            return;
+        }
+        unRegisterForConnectionStateChanges2(context);
+
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(TelephonyIntents2_ACTION_ANY_DATA_CONNECTION_STATE_CHANGED);
+        if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
+            Log.v(TAG, "registerForConnectionStateChanges2");
+        }
+        if (sMmsSystemEventReceiver2 == null) {
+            sMmsSystemEventReceiver2 = new MmsSystemEventReceiver();
+        }
+
+        context.registerReceiver(sMmsSystemEventReceiver2, intentFilter);
+    }
+
+    public static void unRegisterForConnectionStateChanges2(Context context) {
+        if (!MmsConfig.isDualSimSupported()) {
+            return;
+        }
+        if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
+            Log.v(TAG, "unRegisterForConnectionStateChanges2");
+        }
+        if (sMmsSystemEventReceiver2 != null) {
+            try {
+                context.unregisterReceiver(sMmsSystemEventReceiver2);
+            } catch (IllegalArgumentException e) {
+                // Allow un-matched register-unregister calls
+                Log.v(TAG, "IllegalArgumentException: registerForConnectionStateChanges2");
+            }
         }
     }
 }

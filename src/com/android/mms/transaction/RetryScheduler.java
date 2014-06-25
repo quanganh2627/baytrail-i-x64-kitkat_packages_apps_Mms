@@ -279,10 +279,11 @@ public class RetryScheduler implements Observer {
                 Long.MAX_VALUE);
         if (cursor != null) {
             try {
-                if (cursor.moveToFirst()) {
+                while (cursor.moveToNext()) {
                     // The result of getPendingMessages() is order by due time.
                     long retryAt = cursor.getLong(cursor.getColumnIndexOrThrow(
                             PendingMessages.DUE_TIME));
+                    if (retryAt - System.currentTimeMillis() <= 0) continue;
 
                     Intent service = new Intent(TransactionService.ACTION_ONALARM,
                                         null, context, TransactionService.class);
@@ -296,6 +297,7 @@ public class RetryScheduler implements Observer {
                         Log.v(TAG, "Next retry is scheduled at"
                                 + (retryAt - System.currentTimeMillis()) + "ms from now");
                     }
+                    break;
                 }
             } finally {
                 cursor.close();

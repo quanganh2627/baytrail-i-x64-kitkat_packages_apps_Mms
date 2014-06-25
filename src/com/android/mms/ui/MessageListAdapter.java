@@ -48,6 +48,9 @@ public class MessageListAdapter extends CursorAdapter {
     private static final String TAG = "MessageListAdapter";
     private static final boolean LOCAL_LOGV = false;
 
+    private static final String Sms_IMSI = "imsi";
+    private static final String Mms_IMSI = "imsi";
+
     static final String[] PROJECTION = new String[] {
         // TODO: should move this symbol into com.android.mms.telephony.Telephony.
         MmsSms.TYPE_DISCRIMINATOR_COLUMN,
@@ -76,7 +79,10 @@ public class MessageListAdapter extends CursorAdapter {
         PendingMessages.ERROR_TYPE,
         Mms.LOCKED,
         Mms.STATUS,
-        Mms.TEXT_ONLY
+        Mms.TEXT_ONLY,
+        // For DSDS
+        Sms_IMSI,
+        Mms_IMSI,
     };
 
     // The indexes of the default columns which must be consistent
@@ -106,6 +112,8 @@ public class MessageListAdapter extends CursorAdapter {
     static final int COLUMN_MMS_LOCKED          = 22;
     static final int COLUMN_MMS_STATUS          = 23;
     static final int COLUMN_MMS_TEXT_ONLY       = 24;
+    static final int COLUMN_SMS_IMSI            = 25;
+    static final int COLUMN_MMS_IMSI            = 26;
 
     private static final int CACHE_SIZE         = 50;
 
@@ -305,7 +313,8 @@ public class MessageListAdapter extends CursorAdapter {
             if (cursor.moveToFirst()) {
                 do {
                     long id = cursor.getLong(mRowIDColumn);
-                    if (id == item.mMsgId) {
+                    String type = cursor.getString(mColumnsMap.mColumnMsgType); // ref
+                    if (id == item.mMsgId && (type != null && type.equals(item.mType))) {
                         return cursor;
                     }
                 } while (cursor.moveToNext());
@@ -339,6 +348,8 @@ public class MessageListAdapter extends CursorAdapter {
         public int mColumnMmsLocked;
         public int mColumnMmsStatus;
         public int mColumnMmsTextOnly;
+        public int mColumnSmsImsi;
+        public int mColumnMmsImsi;
 
         public ColumnsMap() {
             mColumnMsgType            = COLUMN_MSG_TYPE;
@@ -361,6 +372,8 @@ public class MessageListAdapter extends CursorAdapter {
             mColumnMmsLocked          = COLUMN_MMS_LOCKED;
             mColumnMmsStatus          = COLUMN_MMS_STATUS;
             mColumnMmsTextOnly        = COLUMN_MMS_TEXT_ONLY;
+            mColumnSmsImsi            = COLUMN_SMS_IMSI;
+            mColumnMmsImsi            = COLUMN_MMS_IMSI;
         }
 
         public ColumnsMap(Cursor cursor) {
@@ -483,6 +496,18 @@ public class MessageListAdapter extends CursorAdapter {
 
             try {
                 mColumnMmsTextOnly = cursor.getColumnIndexOrThrow(Mms.TEXT_ONLY);
+            } catch (IllegalArgumentException e) {
+                Log.w("colsMap", e.getMessage());
+            }
+
+            try {
+                mColumnSmsImsi = cursor.getColumnIndexOrThrow(Sms_IMSI);
+            } catch (IllegalArgumentException e) {
+                Log.w("colsMap", e.getMessage());
+            }
+
+            try {
+                mColumnMmsImsi = cursor.getColumnIndexOrThrow(Mms_IMSI);
             } catch (IllegalArgumentException e) {
                 Log.w("colsMap", e.getMessage());
             }

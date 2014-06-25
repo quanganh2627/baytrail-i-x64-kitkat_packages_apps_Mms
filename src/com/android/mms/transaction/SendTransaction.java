@@ -30,6 +30,7 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import com.android.mms.LogTag;
+import com.android.mms.MmsConfig;
 import com.android.mms.ui.MessageUtils;
 import com.android.mms.util.RateController;
 import com.android.mms.util.SendingProgressTokenManager;
@@ -65,6 +66,9 @@ public class SendTransaction extends Transaction implements Runnable {
         super(context, transId, connectionSettings);
         mSendReqURI = Uri.parse(uri);
         mId = uri;
+        if (MmsConfig.isDualSimSupported()) {
+            mIMSI = loadMessageImsi(context.getContentResolver(), mSendReqURI);
+        }
 
         // Attach the transaction to the instance of RetryScheduler.
         attach(RetryScheduler.getInstance(context));

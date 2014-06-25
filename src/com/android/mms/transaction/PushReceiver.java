@@ -36,8 +36,12 @@ import android.provider.Telephony.Mms;
 import android.provider.Telephony.Mms.Inbox;
 import android.util.Log;
 
+import com.android.mms.LogTag;
+import com.android.mms.MmsApp;
 import com.android.mms.MmsConfig;
 import com.android.mms.ui.MessagingPreferenceActivity;
+import com.android.mms.util.DownloadManager;
+import com.android.internal.telephony.TelephonyConstants;
 import com.google.android.mms.ContentType;
 import com.google.android.mms.MmsException;
 import com.google.android.mms.pdu.DeliveryInd;
@@ -69,6 +73,17 @@ public class PushReceiver extends BroadcastReceiver {
 
             // Get raw PDU push-data from the message and parse it
             byte[] pushData = intent.getByteArrayExtra("data");
+            boolean isSecondarySim = false;
+            String imsi = null;
+            if (MmsConfig.isDualSimSupported()) {
+                if ("GSM2".equals(intent.getStringExtra(TelephonyConstants.FROM_PHONE))) {
+                    imsi = MmsApp.getApplication().getTelephonyManager2().getSubscriberId();
+                    isSecondarySim = true;
+                } else {
+                    imsi = MmsApp.getApplication().getTelephonyManager().getSubscriberId();
+                }
+            }
+
             PduParser parser = new PduParser(pushData);
             GenericPdu pdu = parser.parse();
 
@@ -122,11 +137,35 @@ public class PushReceiver extends BroadcastReceiver {
                             // Save the pdu. If we can start downloading the real pdu immediately,
                             // don't allow persist() to create a thread for the notificationInd
                             // because it causes UI jank.
+                            boolean allowAutoDownload = false;
+                            if (isSecondarySim) {
+                                if (!MmsConfig.getSecondaryDownloadMmsManual()) {
+                                    allowAutoDownload = NotificationTransaction.allowAutoDownload();
+                                }
+                            } else {
+                                allowAutoDownload = NotificationTransaction.allowAutoDownload();
+                            }
                             Uri uri = p.persist(pdu, Inbox.CONTENT_URI,
-                                    !NotificationTransaction.allowAutoDownload(),
+                                    isSecondarySim || !allowAutoDownload,
                                     MessagingPreferenceActivity.getIsGroupMmsEnabled(mContext),
                                     null);
-
+                            if (MmsConfig.isDualSimSupported()) {
+                                Transaction.updateMessageImsi(mContext.getContentResolver(), uri, imsi);
+                                if (isSecondarySim && !allowAutoDownload) {
+                                    // only auto-retrieve mms from primary SIM
+                                    // XXX : As REQ, we cannot send Notify-Resp to server due to it must be sent as HTTP Req.
+                                    // Hope this won't break MMS-PROTOCOL-CONF
+                                    threadId = MessagingNotification.getThreadId(mContext, uri);
+                                    MessagingNotification.blockingUpdateNewMessageIndicator(mContext, threadId, false);
+                                    DownloadManager.getInstance().markState(uri, DownloadManager.STATE_TRANSIENT_FAILURE);
+                                    if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
+                                        byte[] location = nInd.getContentLocation();
+                                        Log.v(TAG, "Do not auto-retrive mms from non-primary SIM: "
+                                                + (location != null ? new String(location) : "unknown"));
+                                    }
+                                    break;
+                                }
+                            }
                             // Start service to finish the notification transaction.
                             Intent svc = new Intent(mContext, TransactionService.class);
                             svc.putExtra(TransactionBundle.URI, uri.toString());

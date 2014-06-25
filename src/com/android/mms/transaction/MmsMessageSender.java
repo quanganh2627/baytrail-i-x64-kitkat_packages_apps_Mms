@@ -27,9 +27,11 @@ import android.preference.PreferenceManager;
 import android.provider.Telephony.Mms;
 import android.provider.Telephony.MmsSms;
 import android.provider.Telephony.MmsSms.PendingMessages;
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.android.mms.LogTag;
+import com.android.mms.MmsConfig;
 import com.android.mms.ui.ComposeMessageActivity;
 import com.android.mms.ui.MessagingPreferenceActivity;
 import com.android.mms.util.SendingProgressTokenManager;
@@ -68,6 +70,10 @@ public class MmsMessageSender implements MessageSender {
     }
 
     public boolean sendMessage(long token) throws MmsException {
+        return sendMessage(null, token);
+    }
+
+    public boolean sendMessage(String imsi, long token) throws MmsException {
         // Load the MMS from the message uri
         if (Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
             LogTag.debug("sendMessage uri: " + mMessageUri);
@@ -93,6 +99,10 @@ public class MmsMessageSender implements MessageSender {
         sendReq.setMessageSize(mMessageSize);
 
         p.updateHeaders(mMessageUri, sendReq);
+
+        if (MmsConfig.isDualSimSupported() && !TextUtils.isEmpty(imsi)) {
+            Transaction.updateMessageImsi(mContext.getContentResolver(), mMessageUri, imsi);
+        }
 
         long messageId = ContentUris.parseId(mMessageUri);
 

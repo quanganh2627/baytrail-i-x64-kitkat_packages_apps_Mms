@@ -20,9 +20,11 @@ package com.android.mms.ui;
 import android.app.ActionBar;
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
@@ -46,6 +48,10 @@ import com.android.mms.MmsConfig;
 import com.android.mms.R;
 import com.android.mms.transaction.TransactionService;
 import com.android.mms.util.Recycler;
+
+import com.android.internal.telephony.IccCardConstants;
+import com.android.internal.telephony.TelephonyIntents;
+import com.android.internal.telephony.TelephonyIntents2;
 
 /**
  * With this activity, users can set preferences for MMS and SMS and
@@ -87,6 +93,8 @@ public class MessagingPreferenceActivity extends PreferenceActivity
     private Preference mMmsGroupMmsPref;
     private Preference mMmsReadReportPref;
     private Preference mManageSimPref;
+    private Preference mManageSim1Pref;
+    private Preference mManageSim2Pref;
     private Preference mClearHistoryPref;
     private CheckBoxPreference mVibratePref;
     private CheckBoxPreference mEnableNotificationsPref;
@@ -99,6 +107,17 @@ public class MessagingPreferenceActivity extends PreferenceActivity
     // Whether or not we are currently enabled for SMS. This field is updated in onResume to make
     // sure we notice if the user has changed the default SMS app.
     private boolean mIsSmsEnabled;
+
+    private BroadcastReceiver mReceiver = new BroadcastReceiver() {
+        public void onReceive(Context context, Intent intent) {
+            final String action = intent.getAction();
+            if (TelephonyIntents.ACTION_SIM_STATE_CHANGED.equals(action) ||
+                    TelephonyIntents2.ACTION_SIM_STATE_CHANGED.equals(action)) {
+                setPreferenceScreen(null);
+                loadPrefs();
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle icicle) {
@@ -144,6 +163,12 @@ public class MessagingPreferenceActivity extends PreferenceActivity
         mNotificationPrefCategory.setEnabled(mIsSmsEnabled);
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        unregisterReceiver(mReceiver);
+    }
+
     private void loadPrefs() {
         addPreferencesFromResource(R.xml.preferences);
 
@@ -157,6 +182,8 @@ public class MessagingPreferenceActivity extends PreferenceActivity
                 (PreferenceCategory)findPreference("pref_key_notification_settings");
 
         mManageSimPref = findPreference("pref_key_manage_sim_messages");
+        mManageSim1Pref = findPreference("pref_key_manage_sim1_messages");
+        mManageSim2Pref = findPreference("pref_key_manage_sim2_messages");
         mSmsLimitPref = findPreference("pref_key_sms_delete_limit");
         mSmsDeliveryReportPref = findPreference("pref_key_sms_delivery_reports");
         mMmsDeliveryReportPref = findPreference("pref_key_mms_delivery_reports");
@@ -188,14 +215,51 @@ public class MessagingPreferenceActivity extends PreferenceActivity
     }
 
     private void setMessagePreferences() {
-        if (!MmsApp.getApplication().getTelephonyManager().hasIccCard()) {
-            // No SIM card, remove the SIM-related prefs
-            mSmsPrefCategory.removePreference(mManageSimPref);
+        PreferenceCategory smsCategory =
+                (PreferenceCategory)findPreference("pref_key_sms_settings");
+        int smsItemCount = 2;
+        if (MmsConfig.isDualSimSupported()) {
+            smsCategory.removePreference(mManageSimPref);
+            smsItemCount = 3;
+            boolean primaryExists = MmsApp.getApplication().getTelephonyManager().hasIccCard();
+            boolean secondaryExists = MmsApp.getApplication().getTelephonyManager2().hasIccCard();
+
+            if (MmsApp.isPrimaryId(MmsConfig.DSDS_SLOT_1_ID)) {
+                // SIM 1 is primary SIM Card
+                if (!primaryExists || MmsApp.isPrimarySimPinLocked()) {
+                    smsCategory.removePreference(mManageSim1Pref);
+                    smsItemCount--;
+                }
+                if (!secondaryExists || MmsApp.isSecondarySimPinLocked()) {
+                    smsCategory.removePreference(mManageSim2Pref);
+                    smsItemCount--;
+                }
+            } else {
+                // SIM 2 is primary SIM Card
+                if (!primaryExists || MmsApp.isPrimarySimPinLocked()) {
+                    smsCategory.removePreference(mManageSim2Pref);
+                    smsItemCount--;
+                }
+                if (!secondaryExists || MmsApp.isSecondarySimPinLocked()) {
+                    smsCategory.removePreference(mManageSim1Pref);
+                    smsItemCount--;
+                }
+            }
+        } else {
+            smsCategory.removePreference(mManageSim1Pref);
+            smsCategory.removePreference(mManageSim2Pref);
+            if (!MmsApp.getApplication().getTelephonyManager().hasIccCard()) {
+            	// No SIM card, remove the SIM-related prefs
+            	// in kk only mSmsPrefCategory.removePreference(mManageSimPref);
+				smsCategory.removePreference(mManageSimPref);
+                smsItemCount--;
+            }
         }
 
         if (!MmsConfig.getSMSDeliveryReportsEnabled()) {
             mSmsPrefCategory.removePreference(mSmsDeliveryReportPref);
-            if (!MmsApp.getApplication().getTelephonyManager().hasIccCard()) {
+            //if (!MmsApp.getApplication().getTelephonyManager().hasIccCard()) {
+            if (smsItemCount - 1 <= 0) { // ref
                 getPreferenceScreen().removePreference(mSmsPrefCategory);
             }
         }
@@ -313,8 +377,13 @@ public class MessagingPreferenceActivity extends PreferenceActivity
                     mMmsRecycler.getMessageMinLimit(),
                     mMmsRecycler.getMessageMaxLimit(),
                     R.string.pref_title_mms_delete).show();
-        } else if (preference == mManageSimPref) {
-            startActivity(new Intent(this, ManageSimMessages.class));
+        } else if (preference == mManageSimPref
+                || preference == mManageSim1Pref
+                || preference == mManageSim2Pref) {
+            Intent i = new Intent(this, ManageSimMessages.class);
+            i.putExtra("index", preference==mManageSim2Pref?
+                    MmsConfig.DSDS_SLOT_2_ID : MmsConfig.DSDS_SLOT_1_ID);
+            startActivity(i);
         } else if (preference == mClearHistoryPref) {
             showDialog(CONFIRM_CLEAR_SEARCH_HISTORY_DIALOG);
             return true;
@@ -397,6 +466,13 @@ public class MessagingPreferenceActivity extends PreferenceActivity
 
     private void registerListeners() {
         mRingtonePref.setOnPreferenceChangeListener(this);
+        final IntentFilter intentFilter =
+                 new IntentFilter(TelephonyIntents.ACTION_SIM_STATE_CHANGED); // ref
+        if (MmsConfig.isDualSimSupported()) {
+            intentFilter.addAction(TelephonyIntents2.ACTION_SIM_STATE_CHANGED);
+        }
+
+        registerReceiver(mReceiver, intentFilter);
     }
 
     public boolean onPreferenceChange(Preference preference, Object newValue) {

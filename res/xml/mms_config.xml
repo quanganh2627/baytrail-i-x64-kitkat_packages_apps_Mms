@@ -105,5 +105,7 @@
     <string name="httpParamsLine1Key">##LINE1##</string>
     -->
 
+    <!-- Reference for secondary sim download mms automatically, values:follow_preference, always_manual -->
+    <string name="secondary_sim_mms_download_policy">follow_preference</string>
 
 </mms_config>

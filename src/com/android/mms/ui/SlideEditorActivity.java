@@ -219,6 +219,7 @@ public class SlideEditorActivity extends Activity {
                     PduBody pb = mSlideshowModel.toPduBody();
                     PduPersister.getPduPersister(this).updateParts(mUri, pb, null);
                     mSlideshowModel.sync(pb);
+                    mDirty = false;
                 }  catch (MmsException e) {
                     Log.e(TAG, "Cannot update the message: " + mUri, e);
                 }

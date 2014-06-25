@@ -17,6 +17,7 @@
 
 package com.android.mms.ui;
 
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -58,6 +59,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.android.mms.MmsApp;
+import com.android.mms.MmsConfig;
 import com.android.mms.R;
 import com.android.mms.data.Contact;
 import com.android.mms.data.WorkingMessage;
@@ -92,6 +94,7 @@ public class MessageListItem extends LinearLayout implements
     private ImageView mLockedIndicator;
     private ImageView mDeliveredIndicator;
     private ImageView mDetailsIndicator;
+    private ImageView mSlotIndicator;
     private ImageButton mSlideShowButton;
     private TextView mBodyTextView;
     private Button mDownloadButton;
@@ -138,6 +141,7 @@ public class MessageListItem extends LinearLayout implements
         mLockedIndicator = (ImageView) findViewById(R.id.locked_indicator);
         mDeliveredIndicator = (ImageView) findViewById(R.id.delivered_indicator);
         mDetailsIndicator = (ImageView) findViewById(R.id.details_indicator);
+        mSlotIndicator = (ImageView) findViewById(R.id.slot_indicator);
         mAvatar = (QuickContactDivot) findViewById(R.id.avatar);
         mMessageBlock = findViewById(R.id.message_block);
     }
@@ -215,6 +219,9 @@ public class MessageListItem extends LinearLayout implements
             case DownloadManager.STATE_DOWNLOADING:
                 showDownloadingAttachment();
                 break;
+            case DownloadManager.STATE_STARTING:
+                showStartingAttachment();
+                break;
             case DownloadManager.STATE_UNKNOWN:
             case DownloadManager.STATE_UNSTARTED:
                 DownloadManager downloadManager = DownloadManager.getInstance();
@@ -235,22 +242,30 @@ public class MessageListItem extends LinearLayout implements
                 setLongClickable(true);
                 inflateDownloadControls();
                 mDownloadingLabel.setVisibility(View.GONE);
-                mDownloadButton.setVisibility(View.VISIBLE);
-                mDownloadButton.setOnClickListener(new OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        mDownloadingLabel.setVisibility(View.VISIBLE);
-                        mDownloadButton.setVisibility(View.GONE);
-                        Intent intent = new Intent(mContext, TransactionService.class);
-                        intent.putExtra(TransactionBundle.URI, mMessageItem.mMessageUri.toString());
-                        intent.putExtra(TransactionBundle.TRANSACTION_TYPE,
-                                Transaction.RETRIEVE_TRANSACTION);
-                        mContext.startService(intent);
+                if (MmsApp.getApplication().isDynamicDataSimSupported()) {
+                    mDownloadButton.setVisibility(View.VISIBLE);
+                    mDownloadButton.setOnClickListener(new OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            if (mMessageItem.mMessageUri != null) {
+                                mDownloadingLabel.setVisibility(View.VISIBLE);
+                                mDownloadingLabel.setText(R.string.starting);
+                                mDownloadButton.setVisibility(View.GONE);
+                                DownloadManager.getInstance().markStateAsStarting(mMessageItem.mMessageUri);
+                                Intent intent = new Intent(mContext, TransactionService.class);
+                                intent.putExtra(TransactionBundle.URI, mMessageItem.mMessageUri.toString());
+                                intent.putExtra(TransactionBundle.TRANSACTION_TYPE,
+                                        Transaction.RETRIEVE_TRANSACTION);
+                                mContext.startService(intent);
 
-                        DownloadManager.getInstance().markState(
-                                    mMessageItem.mMessageUri, DownloadManager.STATE_PRE_DOWNLOADING);
-                    }
-                });
+                                DownloadManager.getInstance().markState(
+                                            mMessageItem.mMessageUri, DownloadManager.STATE_PRE_DOWNLOADING);
+                            }
+                        }
+                    });
+                } else {
+                    mDownloadButton.setEnabled(false);
+                }
                 break;
         }
 
@@ -259,6 +274,7 @@ public class MessageListItem extends LinearLayout implements
         mDeliveredIndicator.setVisibility(View.GONE);
         mDetailsIndicator.setVisibility(View.GONE);
         updateAvatarView(mMessageItem.mAddress, false);
+        updateSlotIndicator(mMessageItem);
     }
 
     private String buildTimestampLine(String timestamp) {
@@ -274,6 +290,14 @@ public class MessageListItem extends LinearLayout implements
     private void showDownloadingAttachment() {
         inflateDownloadControls();
         mDownloadingLabel.setVisibility(View.VISIBLE);
+        mDownloadingLabel.setText(R.string.downloading);
+        mDownloadButton.setVisibility(View.GONE);
+    }
+
+    private void showStartingAttachment() {
+        inflateDownloadControls();
+        mDownloadingLabel.setVisibility(View.VISIBLE);
+        mDownloadingLabel.setText(R.string.starting);
         mDownloadButton.setVisibility(View.GONE);
     }
 
@@ -296,6 +320,22 @@ public class MessageListItem extends LinearLayout implements
             avatarDrawable = sDefaultContactImage;
         }
         mAvatar.setImageDrawable(avatarDrawable);
+    }
+
+    private void updateSlotIndicator(final MessageItem msgItem) {
+        if (!MmsConfig.isDualSimSupported()) {
+            return;
+        }
+        int simId = MmsApp.getSimIdByIMSI(msgItem.mIMSI);
+        if (simId == MmsConfig.DSDS_SLOT_1_ID) {
+            mSlotIndicator.setImageResource(R.drawable.sim_1_ind);
+            mSlotIndicator.setVisibility(View.VISIBLE);
+        } else if (simId == MmsConfig.DSDS_SLOT_2_ID) {
+            mSlotIndicator.setImageResource(R.drawable.sim_2_ind);
+            mSlotIndicator.setVisibility(View.VISIBLE);
+        } else  {
+            mSlotIndicator.setVisibility(View.GONE);
+        }
     }
 
     private void bindCommonMessage(final boolean sameItem) {
@@ -418,6 +458,7 @@ public class MessageListItem extends LinearLayout implements
             }
         }
         drawRightStatusIndicator(mMessageItem);
+        updateSlotIndicator(mMessageItem);
 
         requestLayout();
     }
@@ -602,6 +643,34 @@ public class MessageListItem extends LinearLayout implements
         }
     }
 
+    private URLSpan[] getBodyTextViewUrls() {
+        URLSpan[] spans = mBodyTextView.getUrls();
+        ArrayList<URLSpan> spanBuf = new ArrayList<URLSpan>();
+        if (spans != null) {
+            int length = spans.length;
+            final String mailToPrefix = "mailto:";
+            for (int i = 0; i < length; i++) {
+                String url = spans[i].getURL();
+                try {
+                    Uri uri = Uri.parse(url);
+                    mContext.getPackageManager().getActivityIcon(new Intent(
+                            Intent.ACTION_VIEW, uri));
+                } catch (android.content.pm.PackageManager.NameNotFoundException ex) {
+                    if (url.startsWith(mailToPrefix)) {
+                        continue;
+                    }
+                }
+                spanBuf.add(spans[i]);
+            }
+        }
+        if (!spanBuf.isEmpty()) {
+            spans = spanBuf.toArray(new URLSpan[spanBuf.size()]);
+        } else {
+            spans = new URLSpan[0];
+        }
+        return spans;
+    }
+
     public void onMessageListItemClick() {
         // If the message is a failed one, clicking it should reload it in the compose view,
         // regardless of whether it has links in it
@@ -616,7 +685,7 @@ public class MessageListItem extends LinearLayout implements
         }
 
         // Check for links. If none, do nothing; if 1, open it; if >1, ask user to pick one
-        final URLSpan[] spans = mBodyTextView.getUrls();
+        final URLSpan[] spans = getBodyTextViewUrls();
 
         if (spans.length == 0) {
             sendMessage(mMessageItem, MSG_LIST_DETAILS);    // show the message details dialog
@@ -628,11 +697,11 @@ public class MessageListItem extends LinearLayout implements
                 @Override
                 public View getView(int position, View convertView, ViewGroup parent) {
                     View v = super.getView(position, convertView, parent);
+                    URLSpan span = getItem(position);
+                    String url = span.getURL();
+                    TextView tv = (TextView) v;
                     try {
-                        URLSpan span = getItem(position);
-                        String url = span.getURL();
                         Uri uri = Uri.parse(url);
-                        TextView tv = (TextView) v;
                         Drawable d = mContext.getPackageManager().getActivityIcon(
                                 new Intent(Intent.ACTION_VIEW, uri));
                         if (d != null) {
@@ -640,21 +709,29 @@ public class MessageListItem extends LinearLayout implements
                             tv.setCompoundDrawablePadding(10);
                             tv.setCompoundDrawables(d, null, null, null);
                         }
-                        final String telPrefix = "tel:";
-                        if (url.startsWith(telPrefix)) {
-                            if ((mDefaultCountryIso == null) || mDefaultCountryIso.isEmpty()) {
-                                url = url.substring(telPrefix.length());
-                            }
-                            else {
-                                url = PhoneNumberUtils.formatNumber(
-                                        url.substring(telPrefix.length()), mDefaultCountryIso);
-                            }
-                        }
-                        tv.setText(url);
                     } catch (android.content.pm.PackageManager.NameNotFoundException ex) {
                         // it's ok if we're unable to set the drawable for this view - the user
                         // can still use it
                     }
+                    final String telPrefix = "tel:";
+                    final String mailToPrefix = "mailto:";
+                    if (url.startsWith(telPrefix)) {
+                        if ((mDefaultCountryIso == null) || mDefaultCountryIso.isEmpty()) {
+                            url = url.substring(telPrefix.length());
+                        }
+                        else {
+                            String formatted = PhoneNumberUtils.formatNumber(
+                                    url.substring(telPrefix.length()), mDefaultCountryIso);
+                            if (formatted == null || formatted.isEmpty()) {
+                                url = url.substring(telPrefix.length());
+                            } else {
+                                url = formatted;
+                            }
+                        }
+                    } else if (url.startsWith(mailToPrefix)) {
+                        url = url.substring(mailToPrefix.length());
+                    }
+                    tv.setText(url);
                     return v;
                 }
             };
@@ -744,6 +821,11 @@ public class MessageListItem extends LinearLayout implements
                 || (msgItem.isMms() &&
                         msgItem.mDeliveryStatus == MessageItem.DeliveryStatus.RECEIVED)) {
             mDetailsIndicator.setImageResource(R.drawable.ic_sms_mms_details);
+            if (msgItem.isMms()
+                    && msgItem.mDeliveryStatus == MessageItem.DeliveryStatus.RECEIVED
+                    && !msgItem.isSending()) {
+                mDetailsIndicator.setImageResource(R.drawable.ic_sms_mms_delivered);
+            }
             mDetailsIndicator.setVisibility(View.VISIBLE);
         } else {
             mDetailsIndicator.setVisibility(View.GONE);

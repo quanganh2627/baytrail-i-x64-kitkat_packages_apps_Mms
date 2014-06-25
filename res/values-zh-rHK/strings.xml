@@ -355,4 +355,19 @@
     <string name="banner_sms_promo_title_initial" msgid="510014388581481569">"「短訊」不是您的短訊應用程式"</string>
     <string name="banner_sms_promo_title_application" msgid="8123569785369713254">"「<xliff:g id="APPNAME">%s</xliff:g>」是您的短訊應用程式"</string>
     <string name="banner_sms_promo_message" msgid="3536714414252763826">"您可以在 [設定] 中變更這項設定"</string>
+
+    <!-- Strings added by  -->
+    <string name="send_sim1">卡1發送</string>
+    <string name="send_sim2">卡2發送</string>
+    <string name="mms_send_sim1">卡1彩訊發送</string>
+    <string name="mms_send_sim2">卡2彩訊發送</string>
+    <string name="pref_title_manage_sim1_messages">卡1信息</string>
+    <string name="pref_title_manage_sim2_messages">卡2信息</string>
+    <string name="sim1_manage_messages_title">SIM卡1上的短信</string>
+    <string name="sim2_manage_messages_title">SIM卡2上的短信</string>
+    <string name="sim1_full_title">SIM 卡1已滿</string>
+    <string name="sim2_full_title">SIM 卡2已滿</string>
+    <string name="network_not_available">網路不可用</string>
+    <string name="starting">準備下載</string>
+    <string name="failed_to_resize_message">您的信息無法發送，請重新編輯</string>
 </resources>

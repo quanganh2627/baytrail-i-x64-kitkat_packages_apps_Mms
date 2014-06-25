@@ -31,6 +31,7 @@ import android.util.Log;
 
 import com.android.mms.LogTag;
 import com.android.mms.MmsApp;
+import com.android.mms.MmsConfig;
 import com.android.mms.R;
 import com.android.mms.data.Contact;
 import com.android.mms.data.WorkingMessage;
@@ -93,6 +94,9 @@ public class MessageItem {
     // different, we can clear the message cache so it will get rebuilt and recached.
     boolean mLastSendingState;
 
+    // For DSDS, show the number of SIM Card used to send/recv this message
+    String mIMSI = null;
+
     // Fields for MMS only.
     Uri mMessageUri;
     int mMessageType;
@@ -117,6 +121,10 @@ public class MessageItem {
         mCursor = cursor;
         mColumnsMap = columnsMap;
 
+        if (MmsConfig.isDualSimSupported()) {
+            mIMSI = cursor.getString(columnsMap.mColumnSmsImsi);
+        }
+
         if ("sms".equals(type)) {
             mReadReport = false; // No read reports in sms
 
@@ -132,7 +140,11 @@ public class MessageItem {
                 mDeliveryStatus = DeliveryStatus.PENDING;
             } else {
                 // Success
-                mDeliveryStatus = DeliveryStatus.RECEIVED;
+                if (cursor.getColumnIndex("index_on_icc") > 0) {
+                    mDeliveryStatus = DeliveryStatus.NONE;
+                } else {
+                    mDeliveryStatus = DeliveryStatus.RECEIVED;
+                }
             }
 
             mMessageUri = ContentUris.withAppendedId(Sms.CONTENT_URI, mMsgId);
@@ -143,7 +155,7 @@ public class MessageItem {
                 String meString = context.getString(
                         R.string.messagelist_sender_self);
 
-                mContact = meString;
+                mContact = mAddress = meString;
             } else {
                 // For incoming messages, the ADDRESS field contains the sender.
                 mContact = Contact.get(mAddress, false).getName();
@@ -284,6 +296,9 @@ public class MessageItem {
     }
 
     public int getMmsDownloadStatus() {
+        if (DownloadManager.getInstance().isInStartingState(mMessageUri)) {
+            return DownloadManager.STATE_STARTING;
+        }
         return mMmsStatus & ~DownloadManager.DEFERRED_MASK;
     }
 
@@ -295,7 +310,8 @@ public class MessageItem {
             " address: " + mAddress +
             " contact: " + mContact +
             " read: " + mReadReport +
-            " delivery status: " + mDeliveryStatus;
+            " delivery status: " + mDeliveryStatus
+            + " imsi: " + mIMSI;
     }
 
     public class PduLoadedMessageItemCallback implements ItemLoadedCallback {

@@ -17,6 +17,8 @@
 
 package com.android.mms.transaction;
 
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -27,9 +29,11 @@ import android.net.Uri;
 import android.preference.PreferenceManager;
 import android.provider.Telephony.Sms;
 import android.provider.Telephony.Sms.Inbox;
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.android.mms.LogTag;
+import com.android.mms.MmsConfig;
 import com.android.mms.ui.MessagingPreferenceActivity;
 import com.google.android.mms.MmsException;
 
@@ -42,6 +46,8 @@ public class SmsMessageSender implements MessageSender {
     protected final long mThreadId;
     protected long mTimestamp;
     private static final String TAG = "SmsMessageSender";
+
+    public static final String Sms_IMSI = "imsi";
 
     // Default preference values
     private static final boolean DEFAULT_DELIVERY_REPORT_MODE  = false;
@@ -71,12 +77,16 @@ public class SmsMessageSender implements MessageSender {
     }
 
     public boolean sendMessage(long token) throws MmsException {
-        // In order to send the message one by one, instead of sending now, the message will split,
-        // and be put into the queue along with each destinations
-        return queueMessage(token);
+        return sendMessage(null, token);
     }
 
-    private boolean queueMessage(long token) throws MmsException {
+    public boolean sendMessage(String imsi, long token) throws MmsException {
+        // In order to send the message one by one, instead of sending now, the message will split,
+        // and be put into the queue along with each destinations
+        return queueMessage(imsi, token);
+    }
+
+    private boolean queueMessage(String imsi, long token) throws MmsException {
         if ((mMessageText == null) || (mNumberOfDests == 0)) {
             // Don't try to send an empty message.
             throw new MmsException("Null message body or dest.");
@@ -87,17 +97,33 @@ public class SmsMessageSender implements MessageSender {
                 MessagingPreferenceActivity.SMS_DELIVERY_REPORT_MODE,
                 DEFAULT_DELIVERY_REPORT_MODE);
 
+        Uri uri = Uri.parse("content://sms/queued");
+        ContentResolver resolver = mContext.getContentResolver();
+        ContentValues values = new ContentValues(9);
+
+        values.put(Sms.DATE, mTimestamp);
+        values.put(Sms.READ, Integer.valueOf(1));
+        values.put(Sms.BODY, mMessageText);
+        if (requestDeliveryReport) {
+            values.put(Sms.STATUS, Sms.STATUS_PENDING);
+        }
+        if (mThreadId != -1L) {
+            values.put(Sms.THREAD_ID, mThreadId);
+        }
+
+        if (MmsConfig.isDualSimSupported() && !TextUtils.isEmpty(imsi)) {
+            values.put(Sms_IMSI, imsi);
+        }
+
         for (int i = 0; i < mNumberOfDests; i++) {
             try {
                 if (LogTag.DEBUG_SEND) {
                     Log.v(TAG, "queueMessage mDests[i]: " + mDests[i] + " mThreadId: " + mThreadId);
                 }
-                Sms.addMessageToUri(mContext.getContentResolver(),
-                        Uri.parse("content://sms/queued"), mDests[i],
-                        mMessageText, null, mTimestamp,
-                        true /* read */,
-                        requestDeliveryReport,
-                        mThreadId);
+                values.remove(Sms.ADDRESS);
+                values.put(Sms.ADDRESS, mDests[i]);
+
+                resolver.insert(uri, values);
             } catch (SQLiteException e) {
                 if (LogTag.DEBUG_SEND) {
                     Log.e(TAG, "queueMessage SQLiteException", e);

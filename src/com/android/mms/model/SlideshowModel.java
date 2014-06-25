@@ -620,6 +620,11 @@ public class SlideshowModel extends Model
         cr.checkMessageSize(mCurrentMessageSize, increaseSize, mContext.getContentResolver());
     }
 
+    public void checkReplaceMessageSize(int addSize) throws ContentRestrictionException { //ref
+        ContentRestriction cr = ContentRestrictionFactory.getContentRestriction();
+        cr.checkMessageSize(0, addSize, mContext.getContentResolver());
+    }
+
     /**
      * Determines whether this is a "simple" slideshow.
      * Criteria:

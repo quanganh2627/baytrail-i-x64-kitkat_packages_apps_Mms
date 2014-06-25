@@ -28,6 +28,7 @@ import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 
+import com.android.mms.MmsConfig;
 import com.android.mms.R;
 import com.android.mms.data.WorkingMessage;
 import com.android.mms.model.SlideModel;
@@ -58,7 +59,14 @@ public class AttachmentEditor extends LinearLayout {
     private SlideshowModel mSlideshow;
     private Presenter mPresenter;
     private boolean mCanSend;
+    private boolean mCanEdit;
     private Button mSendButton;
+    private Button mEditButton;
+
+    private Button mReplaceButton;
+    private Button mRemoveButton;
+    private Button mViewButton;
+    private ImageButton mPlayBtn;
 
     public AttachmentEditor(Context context, AttributeSet attr) {
         super(context, attr);
@@ -111,6 +119,19 @@ public class AttachmentEditor extends LinearLayout {
         }
     }
 
+    public void setCanEdit(boolean enable) {
+        if (mCanEdit != enable) {
+            mCanEdit = enable;
+            updateEditButton();
+        }
+    }
+
+    private void updateEditButton() {
+        if (null != mEditButton) {
+            mEditButton.setEnabled(mCanEdit);
+        }
+    }
+
     public void hideView() {
         if (mView != null) {
             ((View)mView).setVisibility(View.GONE);
@@ -137,6 +158,37 @@ public class AttachmentEditor extends LinearLayout {
         public void onClick(View v) {
             Message msg = Message.obtain(mHandler, mWhat);
             msg.sendToTarget();
+            if (mWhat != MSG_REPLACE_IMAGE
+                    && mWhat != MSG_REPLACE_VIDEO
+                    && mWhat != MSG_REPLACE_AUDIO) {
+                updateButtonsState(false);
+            }
+        }
+    }
+
+    private void updateButtonState(Button button, boolean flag) {
+        if (button != null) {
+            button.setEnabled(flag);
+            button.setFocusable(flag);
+        }
+    }
+
+    private void updateButtonState(ImageButton button, boolean flag) {
+        if (button != null) {
+            button.setEnabled(flag);
+            button.setFocusable(flag);
+        }
+    }
+
+    public void updateButtonsState(boolean flag) {
+        if (mSlideshow != null && mSlideshow.size() > 1) {
+            updateButtonState(mPlayBtn, flag);
+            updateButtonState(mRemoveButton, flag);
+            updateButtonState(mEditButton, flag);
+        } else {
+            updateButtonState(mViewButton, flag);
+            updateButtonState(mReplaceButton, flag);
+            updateButtonState(mRemoveButton, flag);
         }
     }
 
@@ -214,6 +266,12 @@ public class AttachmentEditor extends LinearLayout {
 
         Button removeButton = (Button) view.findViewById(R.id.remove_slideshow_button);
         removeButton.setOnClickListener(new MessageOnClick(MSG_REMOVE_ATTACHMENT));
+
+        if (MmsConfig.isDualSimSupported()) {
+            if (mSendButton != null) {
+                mSendButton.setVisibility(View.GONE);
+            }
+        }
 
         return (SlideViewInterface) view;
     }

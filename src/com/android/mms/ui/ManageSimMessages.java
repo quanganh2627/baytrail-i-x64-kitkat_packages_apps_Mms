@@ -21,10 +21,13 @@ import android.app.ActionBar;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.AsyncQueryHandler;
+import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.DialogInterface.OnClickListener;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.database.ContentObserver;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteException;
@@ -44,8 +47,14 @@ import android.widget.AdapterView;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import com.android.mms.MmsApp;
+import com.android.mms.MmsConfig;
 import com.android.mms.R;
 import com.android.mms.transaction.MessagingNotification;
+
+import com.android.internal.telephony.TelephonyIntents;
+import com.android.internal.telephony.IccCardConstants;
+import com.android.internal.telephony.TelephonyIntents2;
 
 /**
  * Displays a list of the SMS messages stored on the ICC.
@@ -53,6 +62,7 @@ import com.android.mms.transaction.MessagingNotification;
 public class ManageSimMessages extends Activity
         implements View.OnCreateContextMenuListener {
     private static final Uri ICC_URI = Uri.parse("content://sms/icc");
+    private static final Uri ICC2_URI = Uri.parse("content://sms/icc2");
     private static final String TAG = "ManageSimMessages";
     private static final int MENU_COPY_TO_PHONE_MEMORY = 0;
     private static final int MENU_DELETE_FROM_SIM = 1;
@@ -63,7 +73,7 @@ public class ManageSimMessages extends Activity
     private static final int SHOW_EMPTY = 1;
     private static final int SHOW_BUSY = 2;
     private int mState;
-
+    private int mSimIndex;
 
     private ContentResolver mContentResolver;
     private Cursor mCursor = null;
@@ -73,6 +83,22 @@ public class ManageSimMessages extends Activity
     private AsyncQueryHandler mQueryHandler = null;
 
     public static final int SIM_FULL_NOTIFICATION_ID = 234;
+
+    protected BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() { //ref
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (TelephonyIntents.ACTION_SIM_STATE_CHANGED.equals(action) ||
+                    TelephonyIntents2.ACTION_SIM_STATE_CHANGED.equals(action)) {
+                int slotId = intent.getIntExtra("slot", 0);
+                String stateExtra = intent.getStringExtra(IccCardConstants.INTENT_KEY_ICC_STATE);
+                if ((slotId == mSimIndex || mSimIndex == MmsConfig.DSDS_INVALID_SLOT_ID) &&
+                        stateExtra != null &&
+                        IccCardConstants.INTENT_VALUE_ICC_ABSENT.equals(stateExtra)) {
+                    updateState(SHOW_EMPTY);
+                }
+            }
+        }
+    };
 
     private final ContentObserver simChangeObserver =
             new ContentObserver(new Handler()) {
@@ -111,6 +137,16 @@ public class ManageSimMessages extends Activity
                 SIM_FULL_NOTIFICATION_ID);
 
         updateState(SHOW_BUSY);
+        if (MmsConfig.isDualSimSupported()) {
+            Intent intent = getIntent();
+            if (intent != null) {
+                mSimIndex = intent.getIntExtra("index", MmsConfig.DSDS_SLOT_1_ID);
+            } else {
+                mSimIndex = MmsConfig.DSDS_SLOT_1_ID;
+            }
+        } else {
+            mSimIndex = MmsConfig.DSDS_INVALID_SLOT_ID;
+        }
         startQuery();
     }
 
@@ -157,7 +193,9 @@ public class ManageSimMessages extends Activity
 
     private void startQuery() {
         try {
-            mQueryHandler.startQuery(0, null, ICC_URI, null, null, null, null);
+            Uri simUri = (MmsConfig.isDualSimSupported() && MmsApp.isSecondaryId(mSimIndex)) ?
+                    ICC2_URI : ICC_URI;
+            mQueryHandler.startQuery(0, null, simUri, null, null, null, null);
         } catch (SQLiteException e) {
             SqliteWrapper.checkSQLiteException(this, e);
         }
@@ -167,7 +205,11 @@ public class ManageSimMessages extends Activity
         updateState(SHOW_BUSY);
         if (mCursor != null) {
             stopManagingCursor(mCursor);
+            if (mListAdapter != null) {
+                mListAdapter.changeCursor(null);
+            }
             mCursor.close();
+            mCursor = null;
         }
         startQuery();
     }
@@ -226,11 +268,18 @@ public class ManageSimMessages extends Activity
     public void onPause() {
         super.onPause();
         mContentResolver.unregisterContentObserver(simChangeObserver);
+        unregisterReceiver(mBroadcastReceiver);
     }
 
     private void registerSimChangeObserver() {
         mContentResolver.registerContentObserver(
                 ICC_URI, true, simChangeObserver);
+        final IntentFilter intentFilter =
+                new IntentFilter(TelephonyIntents.ACTION_SIM_STATE_CHANGED); // ref
+        if (MmsConfig.isDualSimSupported()) {
+            intentFilter.addAction(TelephonyIntents2.ACTION_SIM_STATE_CHANGED);
+        }
+        registerReceiver(mBroadcastReceiver, intentFilter);
     }
 
     private void copyToPhoneMemory(Cursor cursor) {
@@ -238,12 +287,18 @@ public class ManageSimMessages extends Activity
                 cursor.getColumnIndexOrThrow("address"));
         String body = cursor.getString(cursor.getColumnIndexOrThrow("body"));
         Long date = cursor.getLong(cursor.getColumnIndexOrThrow("date"));
+        String imsi = null;
+        if (MmsConfig.isDualSimSupported()) {
+            imsi = MmsApp.getIMSIBySimId(mSimIndex);
+        }
 
         try {
             if (isIncomingMessage(cursor)) {
-                Sms.Inbox.addMessage(mContentResolver, address, body, null, date, true /* read */);
+                Sms.Inbox.addMessage(mContentResolver, address, body, null, date, true /* read */,
+                        imsi);
             } else {
-                Sms.Sent.addMessage(mContentResolver, address, body, null, date);
+                Sms.Sent.addMessage(mContentResolver, address, body, null, date,
+                        imsi);
             }
         } catch (SQLiteException e) {
             SqliteWrapper.checkSQLiteException(this, e);
@@ -261,7 +316,9 @@ public class ManageSimMessages extends Activity
     private void deleteFromSim(Cursor cursor) {
         String messageIndexString =
                 cursor.getString(cursor.getColumnIndexOrThrow("index_on_icc"));
-        Uri simUri = ICC_URI.buildUpon().appendPath(messageIndexString).build();
+        Uri iccUri = (MmsConfig.isDualSimSupported() && MmsApp.isSecondaryId(mSimIndex)) ?
+                ICC2_URI : ICC_URI;
+        Uri simUri = iccUri.buildUpon().appendPath(messageIndexString).build();
 
         SqliteWrapper.delete(this, mContentResolver, simUri, null, null);
     }
@@ -328,6 +385,16 @@ public class ManageSimMessages extends Activity
         builder.show();
     }
 
+    private String getTitleString() {
+        if (MmsConfig.isDualSimSupported()) {
+            return mSimIndex != MmsConfig.DSDS_SLOT_2_ID ?
+                getString(R.string.sim1_manage_messages_title) :
+                getString(R.string.sim2_manage_messages_title);
+        } else  {
+            return getString(R.string.sim_manage_messages_title);
+        }
+    }
+
     private void updateState(int state) {
         if (mState == state) {
             return;
@@ -338,14 +405,14 @@ public class ManageSimMessages extends Activity
             case SHOW_LIST:
                 mSimList.setVisibility(View.VISIBLE);
                 mMessage.setVisibility(View.GONE);
-                setTitle(getString(R.string.sim_manage_messages_title));
+                setTitle(getTitleString());
                 setProgressBarIndeterminateVisibility(false);
                 mSimList.requestFocus();
                 break;
             case SHOW_EMPTY:
                 mSimList.setVisibility(View.GONE);
                 mMessage.setVisibility(View.VISIBLE);
-                setTitle(getString(R.string.sim_manage_messages_title));
+                setTitle(getTitleString());
                 setProgressBarIndeterminateVisibility(false);
                 break;
             case SHOW_BUSY:

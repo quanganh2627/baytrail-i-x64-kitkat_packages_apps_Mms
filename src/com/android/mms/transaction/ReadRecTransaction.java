@@ -24,6 +24,7 @@ import android.net.Uri;
 import android.provider.Telephony.Mms.Sent;
 import android.util.Log;
 
+import com.android.mms.MmsConfig;
 import com.android.mms.ui.MessageUtils;
 import com.google.android.mms.MmsException;
 import com.google.android.mms.pdu.EncodedStringValue;
@@ -57,6 +58,9 @@ public class ReadRecTransaction extends Transaction implements Runnable{
         super(context, transId, connectionSettings);
         mReadReportURI = Uri.parse(uri);
         mId = uri;
+        if (MmsConfig.isDualSimSupported()) {
+            mIMSI = loadMessageImsi(context.getContentResolver(), mReadReportURI);
+        }
 
         // Attach the transaction to the instance of RetryScheduler.
         attach(RetryScheduler.getInstance(context));

@@ -31,10 +31,12 @@ public class SmsReceiver extends BroadcastReceiver {
     static final Object mStartingServiceSync = new Object();
     static PowerManager.WakeLock mStartingService;
     private static SmsReceiver sInstance;
+    private static int sRegisterState = 0;
 
     public static SmsReceiver getInstance() {
         if (sInstance == null) {
             sInstance = new SmsReceiver();
+            sRegisterState = 0;
         }
         return sInstance;
     }
@@ -93,6 +95,22 @@ public class SmsReceiver extends BroadcastReceiver {
                     mStartingService.release();
                 }
             }
+        }
+    }
+
+    public static boolean isRegisterEnabled(boolean isPrimary) {
+        if (isPrimary) {
+            return (sRegisterState & 0x1) != 0;
+        } else {
+            return (sRegisterState & 0x2) != 0;
+        }
+    }
+
+    public static void setRegisterEnabled(boolean isPrimary, boolean enabled) {
+        if (enabled) {
+            sRegisterState |= isPrimary ? 0x1 : 0x2;
+        } else {
+            sRegisterState &= isPrimary ? ~0x1 : ~0x2;
         }
     }
 }

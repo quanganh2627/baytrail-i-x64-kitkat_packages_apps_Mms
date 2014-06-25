@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- 
 /*
+ * Copyright (C) 2013 Capital Alliance Software LTD (Pekall)
  * Copyright (C) 2007-2008 Esmertec AG.
  * Copyright (C) 2007-2008 The Android Open Source Project
  *
@@ -355,4 +356,28 @@
     <string name="banner_sms_promo_title_initial" msgid="510014388581481569">"Imilayezo akulona uhlelo lwakho lokusebenza lwe-SMS"</string>
     <string name="banner_sms_promo_title_application" msgid="8123569785369713254">"I-<xliff:g id="APPNAME">%s</xliff:g> inguhlelo lwakho lokusebenza lwe-SMS"</string>
     <string name="banner_sms_promo_message" msgid="3536714414252763826">"Ungashintsha lokhu kokuthi Izilungiselelo"</string>
+
+    <!-- Error message indicating that the message send failed -->
+    <string name="failed_to_send">Failed to send this message</string>
+
+    <!-- The two send button in composer -->
+    <string name="send_sim1">Send 1</string>
+    <string name="send_sim2">Send 2</string>
+    <string name="mms_send_sim1">MMS Send 1</string>
+    <string name="mms_send_sim2">MMS Send 2</string>
+
+    <!-- preference for manage sim 1 messages -->
+    <string name="pref_title_manage_sim1_messages">Manage SIM card 1 messages</string>
+    <string name="pref_title_manage_sim2_messages">Manage SIM card 2 messages</string>
+
+    <!-- Title of screen displaying messages on SIM card 1-->
+    <string name="sim1_manage_messages_title">Text messages on SIM card 1</string>
+    <!-- Title of screen displaying messages on SIM card 2-->
+    <string name="sim2_manage_messages_title">Text messages on SIM card 2</string>
+
+    <!-- Sim Full Notification title for DSDS -->
+    <string name="sim1_full_title">SIM card 1 full</string>
+    <string name="sim2_full_title">SIM card 2 full</string>
+
+    <string name="network_not_available">Network is not available</string>
 </resources>

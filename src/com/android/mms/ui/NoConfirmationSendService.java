@@ -24,6 +24,8 @@ import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Log;
 
+import com.android.mms.MmsApp;
+import com.android.mms.MmsConfig;
 import com.android.mms.data.Conversation;
 import com.android.mms.transaction.SmsMessageSender;
 
@@ -80,13 +82,21 @@ public class NoConfirmationSendService extends IntentService {
             // Using invalid threadId 0 here. When the message is inserted into the db, the
             // provider looks up the threadId based on the recipient(s).
             long threadId = 0;
+            String imsi = MmsApp.getApplication().getTelephonyManager().getSubscriberId();
+            int simId;
+            if (MmsConfig.isDualSimSupported()) {
+                simId = extras.getInt(MmsConfig.EXTRA_SLOT, MmsConfig.DSDS_INVALID_SLOT_ID);
+                if (simId != MmsConfig.DSDS_INVALID_SLOT_ID) {
+                    imsi = MmsApp.getIMSIBySimId(simId);
+                }
+            }
             SmsMessageSender smsMessageSender = new SmsMessageSender(this, dests,
                     message, threadId);
             try {
                 // This call simply puts the message on a queue and sends a broadcast to start
                 // a service to send the message. In queing up the message, however, it does
                 // insert the message into the DB.
-                smsMessageSender.sendMessage(threadId);
+                smsMessageSender.sendMessage(imsi, threadId);
             } catch (Exception e) {
                 Log.e(TAG, "Failed to send SMS message, threadId=" + threadId, e);
             }
