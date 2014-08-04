@@ -49,7 +49,7 @@ public class ReadRecTransaction extends Transaction implements Runnable{
     private static final boolean LOCAL_LOGV = false;
 
     private Thread mThread;
-    private final Uri mReadReportURI;
+    public final Uri mReadReportURI;
 
     public ReadRecTransaction(Context context,
             int transId,

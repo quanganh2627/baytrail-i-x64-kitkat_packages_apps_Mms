@@ -62,7 +62,7 @@ public class RetrieveTransaction extends Transaction implements Runnable {
     private static final boolean DEBUG = false;
     private static final boolean LOCAL_LOGV = false;
 
-    private final Uri mUri;
+    public final Uri mUri;
     private final String mContentLocation;
     private boolean mLocked;
 

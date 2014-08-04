@@ -1683,7 +1683,7 @@ public class ComposeMessageActivity extends Activity
                     extension += DrmUtils.getConvertExtension(type);
                 }
                 // Remove leading periods. The gallery ignores files starting with a period.
-                fileName = fileName.replaceAll("^.", "");
+                fileName = fileName.replaceAll("^\\.", "");
 
                 File file = getUniqueDestination(dir + fileName, extension);
 
@@ -1870,6 +1870,7 @@ public class ComposeMessageActivity extends Activity
         mRecipientsPicker.setOnClickListener(this);
 
         mRecipientsEditor.setAdapter(new ChipsRecipientAdapter(this));
+        mRecipientsEditor.setText(null);
         mRecipientsEditor.populate(recipients);
         mRecipientsEditor.setOnCreateContextMenuListener(mRecipientsMenuCreateListener);
         mRecipientsEditor.addTextChangedListener(mRecipientsWatcher);
@@ -2052,6 +2053,9 @@ public class ComposeMessageActivity extends Activity
         } else {
             hideRecipientEditor();
         }
+        if (mConversation.getMessageCount() == 0 && mConversation.hasDraft()) {
+            initRecipientsEditor();
+        }
 
         updateSendButtonState();
 
@@ -2209,14 +2213,13 @@ public class ComposeMessageActivity extends Activity
         // Register a BroadcastReceiver to listen on HTTP I/O process.
         registerReceiver(mHttpProgressReceiver, mHttpProgressFilter);
         registerReceiver(mSendingStateChangedReceiver, mSendingStateChangedFilter);
-        /* kk_ignore
         final IntentFilter simStateChangeFilter =
                 new IntentFilter(TelephonyIntents.ACTION_SIM_STATE_CHANGED);
         if (MmsConfig.isDualSimSupported()) {
             simStateChangeFilter.addAction(TelephonyIntents2.ACTION_SIM_STATE_CHANGED);
         }
         registerReceiver(mSimStateChangeReceiver, simStateChangeFilter);
-        */
+
         // figure out whether we need to show the keyboard or not.
         // if there is draft to be loaded for 'mConversation', we'll show the keyboard;
         // otherwise we hide the keyboard. In any event, delay loading
@@ -2299,6 +2302,10 @@ public class ComposeMessageActivity extends Activity
                 drawBottomPanel();
             }
             mMessagesAndDraftLoaded = true;
+        } else if (mForwardMessageMode) {
+            if (mBottomPanel.getVisibility() == View.INVISIBLE) {
+                drawBottomPanel();
+            }
         }
     }
 
@@ -2345,6 +2352,9 @@ public class ComposeMessageActivity extends Activity
 
         addRecipientsListeners();
 
+        if (mAttachmentEditor != null) {
+            mAttachmentEditor.updateButtonsState(true);
+        }
         if (Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
             log("update title, mConversation=" + mConversation.toString());
         }
@@ -2439,7 +2449,7 @@ public class ComposeMessageActivity extends Activity
         // Cleanup the BroadcastReceiver.
         unregisterReceiver(mHttpProgressReceiver);
         unregisterReceiver(mSendingStateChangedReceiver);
-        // unregisterReceiver(mSimStateChangeReceiver); // kk_ignore
+        unregisterReceiver(mSimStateChangeReceiver);
     }
 
     @Override
@@ -2719,7 +2729,6 @@ public class ComposeMessageActivity extends Activity
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                /* kk_ignore
                 if (error == WorkingMessage.UNKNOWN_ERROR) {
                     Resources res = getResources();
                     String message = res.getString(R.string.failed_to_resize_message);
@@ -2732,8 +2741,6 @@ public class ComposeMessageActivity extends Activity
                 } else {
                     handleAddAttachmentError(error, R.string.type_picture);
                 }
-				*/
-                handleAddAttachmentError(error, R.string.type_picture);
                 onMessageSent();        // now requery the list of messages
             }
         });
@@ -3309,6 +3316,10 @@ public class ComposeMessageActivity extends Activity
                     message = res.getString(R.string.failed_to_add_media, mediaType);
                     Toast.makeText(ComposeMessageActivity.this, message, Toast.LENGTH_SHORT).show();
                     return;
+                case WorkingMessage.CREATE_DRAFT_ERROR:
+                    message = res.getString(R.string.create_draft_error);
+                    Toast.makeText(ComposeMessageActivity.this, message, Toast.LENGTH_SHORT).show();
+                    return;
                 case WorkingMessage.UNSUPPORTED_TYPE:
                     title = res.getString(R.string.unsupported_media_format, mediaType);
                     message = res.getString(R.string.select_different_media, mediaType);
@@ -3514,7 +3525,7 @@ public class ComposeMessageActivity extends Activity
                 mBottomPanel.setVisibility(View.GONE);
                 mAttachmentEditor.requestFocus();
             }
-            //mAttachmentEditor.setCanEdit(true);
+            mAttachmentEditor.setCanEdit(true);
             return;
         } else {
             mTextEditor.setVisibility(View.VISIBLE);
@@ -3816,6 +3827,7 @@ public class ComposeMessageActivity extends Activity
         mMsgListAdapter.setMsgListItemHandler(mMessageListItemHandler);
         mMsgListView.setAdapter(mMsgListAdapter);
         mMsgListView.setItemsCanFocus(false);
+        mMsgListView.setFocusable(false);
         mMsgListView.setVisibility(mSendDiscreetMode ? View.INVISIBLE : View.VISIBLE);
         mMsgListView.setOnCreateContextMenuListener(mMsgListMenuCreateListener);
         mMsgListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
@@ -3952,7 +3964,6 @@ public class ComposeMessageActivity extends Activity
             // them back once the recipient list has settled.
             removeRecipientsListeners();
 
-            try {
                 mWorkingMessage.send(mDebugRecipients, mUsingSIM);
 
                 mSentMessage = true;
@@ -3960,11 +3971,6 @@ public class ComposeMessageActivity extends Activity
                 addRecipientsListeners();
 
                 mScrollOnSend = true;   // in the next onQueryComplete, scroll the list to the end.
-            } catch (ExceedMessageSizeException ex) {
-                handleAddAttachmentError(WorkingMessage.MESSAGE_SIZE_EXCEEDED,
-                        R.string.type_picture);
-                return;
-            }
         }
         // But bail out if we are supposed to exit after the message is sent.
         if (mSendDiscreetMode) {
@@ -4402,6 +4408,13 @@ public class ComposeMessageActivity extends Activity
                     return;
 
                 case ConversationList.HAVE_LOCKED_MESSAGES_TOKEN:
+                    if (ComposeMessageActivity.this.isFinishing()) {
+                        Log.w(TAG, "ComposeMessageActivity is finished, do nothing ");
+                        if (cursor != null) {
+                            cursor.close();
+                        }
+                        return ;
+                    }
                     @SuppressWarnings("unchecked")
                     ArrayList<Long> threadIds = (ArrayList<Long>)cookie;
                     ConversationList.confirmDeleteThreadDialog(
@@ -4585,15 +4598,17 @@ public class ComposeMessageActivity extends Activity
         }
         // If we're not running, but resume later, the current thread ID will be set in onResume()
     }
-    /* kk_ignore
+
     private BroadcastReceiver mSimStateChangeReceiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
             final String action = intent.getAction();
             if (TelephonyIntents.ACTION_SIM_STATE_CHANGED.equals(action) ||
                     TelephonyIntents2.ACTION_SIM_STATE_CHANGED.equals(action)) {
                 updateSendButtonState();
+                if (ComposeMessageActivity.this.mMsgListAdapter != null) {
+                    ComposeMessageActivity.this.mMsgListAdapter.notifyDataSetChanged();
+                }
             }
         }
     };
-    */
 }

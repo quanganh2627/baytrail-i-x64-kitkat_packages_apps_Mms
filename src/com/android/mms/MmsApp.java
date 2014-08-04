@@ -53,6 +53,7 @@ import com.android.internal.telephony.IccCardConstants;
 import com.android.internal.telephony.TelephonyIntents;
 import com.android.internal.telephony.TelephonyIntents2;
 
+import java.util.Locale;
 public class MmsApp extends Application {
     public static final String LOG_TAG = "Mms";
 
@@ -200,43 +201,8 @@ public class MmsApp extends Application {
         return mTelephonyManager2;
     }
 
-    public static boolean isOnDataSim(ConnectivityManager mgr, String imsi) {
-        if (MmsConfig.isDualSimSupported() && !TextUtils.isEmpty(imsi)) {
-            String subscriberId = null;
-            int id = mgr.getDataSim();
-            if (id == 1) {
-                subscriberId = getApplication().getTelephonyManager2().getSubscriberId();
-            } else {
-                subscriberId = getApplication().getTelephonyManager().getSubscriberId();
-            }
-            return TextUtils.equals(imsi, subscriberId);
-        }
-        return true;
-    }
 
-    public static boolean isDataSimReady(ConnectivityManager mgr) {
-        if (MmsConfig.isDualSimSupported()) {
-            int id = mgr.getDataSim();
-            if (id == 1) {
-                return isSecondarySimReady();
-            } else {
-                return isPrimarySimReady();
-            }
-        }
-        return isPrimarySimReady();
-    }
 
-    public static boolean isNonDataSimReady(ConnectivityManager mgr) {
-        if (MmsConfig.isDualSimSupported()) {
-            int id = mgr.getDataSim();
-            if (id == 1) {
-                return isPrimarySimReady();
-            } else {
-                return isSecondarySimReady();
-            }
-        }
-        return false;
-    }
 
     /**
      * @param imsi The SIM Card's IMSI info
@@ -256,7 +222,9 @@ public class MmsApp extends Application {
      */
     public static boolean isPrimaryId(int simId) {
         if (MmsConfig.isDualSimSupported()) {
-            return (simId == TelephonyManager.getPrimarySim());
+            final ConnectivityManager conn = (ConnectivityManager)getApplication()
+                .getSystemService(Context.CONNECTIVITY_SERVICE);
+            return (simId == conn.getPrimaryDataSim());
         }
         return true;
     }
@@ -295,7 +263,9 @@ public class MmsApp extends Application {
      */
     public static boolean isSecondaryId(int simId) {
         if (MmsConfig.isDualSimSupported()) {
-            if (simId != TelephonyManager.getPrimarySim()
+            final ConnectivityManager conn = (ConnectivityManager)getApplication()
+                .getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (simId != conn.getPrimaryDataSim()
                     && (simId == MmsConfig.DSDS_SLOT_1_ID || simId == MmsConfig.DSDS_SLOT_2_ID)) {
                 return true;
             }
@@ -434,6 +404,8 @@ public class MmsApp extends Application {
             Country country = mCountryDetector.detectCountry();
             if (country != null) {
                 mCountryIso = country.getCountryIso();
+            } else {
+                mCountryIso = Locale.getDefault().getCountry();
             }
         }
         return mCountryIso;

@@ -247,7 +247,7 @@ public abstract class Transaction extends Observable {
 
         InetAddress inetAddr;
         int type = ConnectivityManager.TYPE_MOBILE_MMS;
-        if (MmsConfig.isDualSimSupported() && !MmsApp.isOnDataSim(connMgr, mIMSI)) {
+        if (MmsConfig.isDualSimSupported() && MmsApp.isSecondaryIMSI(mIMSI)) {
             type = ConnectivityManager.TYPE_MOBILE2_MMS;
         }
 

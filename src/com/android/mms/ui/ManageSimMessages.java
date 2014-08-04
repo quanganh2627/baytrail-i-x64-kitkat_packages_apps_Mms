@@ -267,8 +267,8 @@ public class ManageSimMessages extends Activity
     @Override
     public void onPause() {
         super.onPause();
-        mContentResolver.unregisterContentObserver(simChangeObserver);
         unregisterReceiver(mBroadcastReceiver);
+        mContentResolver.unregisterContentObserver(simChangeObserver);
     }
 
     private void registerSimChangeObserver() {

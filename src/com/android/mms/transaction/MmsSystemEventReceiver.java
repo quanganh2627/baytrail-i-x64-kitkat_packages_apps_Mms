@@ -26,9 +26,6 @@ import android.net.NetworkInfo;
 import android.net.Uri;
 import android.provider.Telephony.Mms;
 import android.util.Log;
-import com.android.internal.telephony.TelephonyConstants;
-import com.android.internal.telephony.TelephonyIntents;
-import com.android.internal.telephony.TelephonyIntents2;
 
 import com.android.internal.telephony.PhoneConstants;
 
@@ -54,7 +51,6 @@ public class MmsSystemEventReceiver extends BroadcastReceiver {
     public static final String TelephonyIntents2_ACTION_ANY_DATA_CONNECTION_STATE_CHANGED =
             "com.pekall.intent.ANY_DATA_STATE2";
 
-    private static MmsSystemEventReceiver sMmsSystemEventReceiver;
     private static MmsSystemEventReceiver sMmsSystemEventReceiver2;
     public static void wakeUpService(Context context) {
         if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
@@ -62,6 +58,20 @@ public class MmsSystemEventReceiver extends BroadcastReceiver {
         }
 
         context.startService(new Intent(context, TransactionService.class));
+    }
+    private void handleConnectivityAction(Context context, int type) {
+        NetworkInfo mmsNetworkInfo = mConnMgr.getNetworkInfo(type);
+        if (mmsNetworkInfo == null)
+            return;
+        boolean available = mmsNetworkInfo.isAvailable();
+        boolean isConnected = mmsNetworkInfo.isConnected();
+        if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
+            Log.v(TAG, "MMS " + type + " available = " + available +
+                       ", isConnected = " + isConnected);
+        }
+        if (available && !isConnected) {
+            wakeUpService(context);
+        }
     }
 
     @Override
@@ -85,20 +95,13 @@ public class MmsSystemEventReceiver extends BroadcastReceiver {
                 }
                 return;
             }
-            NetworkInfo mmsNetworkInfo = mConnMgr
-                    .getNetworkInfo(ConnectivityManager.TYPE_MOBILE_MMS);
-            boolean available = mmsNetworkInfo.isAvailable();
-            boolean isConnected = mmsNetworkInfo.isConnected();
+            handleConnectivityAction(context, ConnectivityManager.TYPE_MOBILE_MMS);
+            if (MmsConfig.isDualSimSupported()) {
+                handleConnectivityAction(context, ConnectivityManager.TYPE_MOBILE2_MMS);
 
-            if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
-                Log.v(TAG, "TYPE_MOBILE_MMS available = " + available +
-                           ", isConnected = " + isConnected);
             }
 
             // Wake up transact service when MMS data is available and isn't connected.
-            if (available && !isConnected) {
-                wakeUpService(context);
-            }
 /*        } else if (action.equals(TelephonyIntents.ACTION_ANY_DATA_CONNECTION_STATE_CHANGED)) {
             String state = intent.getStringExtra(PhoneConstants.STATE_KEY);
 

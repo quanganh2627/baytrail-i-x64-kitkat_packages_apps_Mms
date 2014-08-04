@@ -116,6 +116,7 @@ public class WorkingMessage {
     public static final int UNSUPPORTED_TYPE = -3;
     public static final int IMAGE_TOO_LARGE = -4;
     public static final int FAILED_TO_SEND = -5;
+    public static final int CREATE_DRAFT_ERROR = -6;
 
     // Attachment types
     public static final int TEXT = 0;
@@ -1323,7 +1324,8 @@ public class WorkingMessage {
 
             // Just interrupt the process of sending message if recipient mismatch
             LogTag.warnPossibleRecipientMismatch(msg, mActivity);
-        }else {
+        }
+        if (!TextUtils.isEmpty(semiSepRecipients)) {
             // just do a regular send. We're already on a non-ui thread so no need to fire
             // off another thread to do this work.
             sendSmsWorker(msgText, semiSepRecipients, threadId, imsi);
@@ -1450,7 +1452,10 @@ public class WorkingMessage {
                 // Otherwise, sync the MMS message in progress to disk.
                 updateDraftMmsMessage(mmsUri, persister, slideshow, sendReq, null);
             }
-
+            if (mmsUri == null) {
+                mStatusListener.onAttachmentError(CREATE_DRAFT_ERROR);
+                return;
+            }
             // Be paranoid and clean any draft SMS up.
             deleteDraftSmsMessage(threadId);
         } finally {
@@ -1464,19 +1469,17 @@ public class WorkingMessage {
             slideshow.finalResize(mmsUri);
         } catch (ExceedMessageSizeException e1) {
             error = MESSAGE_SIZE_EXCEEDED;
-        } catch (MmsException e1) {
-            error = UNKNOWN_ERROR;
         } catch (Exception e1) {
-            error = FAILED_TO_SEND;
+            error = UNKNOWN_ERROR;
         }
         if (error != 0) {
             markMmsMessageWithError(mmsUri);
             mStatusListener.onAttachmentError(error);
             return;
         }
+        try {
         MessageSender sender = new MmsMessageSender(mActivity, mmsUri,
                 slideshow.getCurrentMessageSize());
-        try {
             if (!sender.sendMessage(imsi, threadId)) {
                 // The message was sent through SMS protocol, we should
                 // delete the copy which was previously saved in MMS drafts.

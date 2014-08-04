@@ -65,14 +65,7 @@ public class TransactionSettings {
         this(context, apnName, true);
     }
 
-    public TransactionSettings(Context context, String apnName, boolean onDataSim) {
-        boolean usePrimary = true;
-        ConnectivityManager mgr = (ConnectivityManager)context.getSystemService(
-                Context.CONNECTIVITY_SERVICE);
-        int dataSim = mgr.getDataSim();
-        if ((onDataSim && dataSim == 1) || (!onDataSim && dataSim != 1)) {
-            usePrimary = false;
-        }
+    public TransactionSettings(Context context, String apnName, boolean usePrimary) {
         if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
             Log.v(TAG, "TransactionSettings: apnName: " + apnName);
         }
@@ -95,7 +88,7 @@ public class TransactionSettings {
         if (Log.isLoggable(LogTag.TRANSACTION, Log.VERBOSE)) {
             Log.v(TAG, "TransactionSettings looking for apn: " + selection + " returned: " +
                     (cursor ==null ? "null cursor" : (cursor.getCount() + " hits")) +
-                    ", on data sim: " + onDataSim);
+                    ", use primary:" + usePrimary);
         }
 
         if (cursor == null) {
