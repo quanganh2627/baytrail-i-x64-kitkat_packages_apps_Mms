@@ -116,7 +116,7 @@ public abstract class Transaction extends Observable {
         return getClass().equals(transaction.getClass())
                 && mId.equals(transaction.mId);
         */
-        return mId.equals(transaction.mId);
+        return mId.equals(transaction.mId) && (getType() == transaction.getType());
     }
 
     /**
