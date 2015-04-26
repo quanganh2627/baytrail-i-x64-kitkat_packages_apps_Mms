@@ -17,8 +17,6 @@
 
 package com.android.mms.ui;
 
-import java.util.regex.Pattern;
-
 import android.content.ContentUris;
 import android.content.Context;
 import android.database.Cursor;
@@ -28,6 +26,8 @@ import android.provider.Telephony.MmsSms;
 import android.provider.Telephony.Sms;
 import android.text.TextUtils;
 import android.util.Log;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 
 import com.android.mms.LogTag;
 import com.android.mms.MmsApp;
@@ -51,7 +51,8 @@ import com.google.android.mms.pdu.PduHeaders;
 import com.google.android.mms.pdu.PduPersister;
 import com.google.android.mms.pdu.RetrieveConf;
 import com.google.android.mms.pdu.SendReq;
-
+import java.util.List;
+import java.util.regex.Pattern;
 /**
  * Mostly immutable model for an SMS/MMS message.
  *
@@ -69,11 +70,14 @@ public class MessageItem {
     final String mType;
     final long mMsgId;
     final int mBoxId;
+    final int mSubId;
+    final int mSlotId;
 
     DeliveryStatus mDeliveryStatus;
     boolean mReadReport;
     boolean mLocked;            // locked to prevent auto-deletion
 
+    String mDisplayName;
     String mTimestamp;
     String mAddress;
     String mContact;
@@ -116,6 +120,14 @@ public class MessageItem {
         mType = type;
         mCursor = cursor;
         mColumnsMap = columnsMap;
+        mSubId = mCursor.getInt(columnsMap.mColumnMmsSubscriptionId);
+        mSlotId = SubscriptionManager.getSlotId(mSubId);
+
+        if (findRecordBySlotId(mContext, mSlotId) != null) {
+            mDisplayName = findRecordBySlotId(mContext, mSlotId).getDisplayName().toString();
+        } else {
+            mDisplayName = mContext.getResources().getString(R.string.sms_message_belong_unknown);
+        }
 
         if ("sms".equals(type)) {
             mReadReport = false; // No read reports in sms
@@ -296,6 +308,28 @@ public class MessageItem {
             " contact: " + mContact +
             " read: " + mReadReport +
             " delivery status: " + mDeliveryStatus;
+    }
+
+    /**
+     * finds a record with slotId.
+     * Since the number of SIMs are few, an array is fine.
+     */
+    public static SubscriptionInfo findRecordBySlotId(Context context, final int slotId) {
+        final List<SubscriptionInfo> subInfoList =
+                SubscriptionManager.from(context).getActiveSubscriptionInfoList();
+        if (subInfoList != null) {
+            final int subInfoLength = subInfoList.size();
+
+            for (int i = 0; i < subInfoLength; ++i) {
+                final SubscriptionInfo sir = subInfoList.get(i);
+                if (sir.getSimSlotIndex() == slotId) {
+                    //Right now we take the first subscription on a SIM.
+                    return sir;
+                }
+            }
+        }
+
+        return null;
     }
 
     public class PduLoadedMessageItemCallback implements ItemLoadedCallback {

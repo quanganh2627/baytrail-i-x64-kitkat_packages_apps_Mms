@@ -101,6 +101,7 @@ public class MessageListItem extends LinearLayout implements
     private MessageItem mMessageItem;
     private String mDefaultCountryIso;
     private TextView mDateView;
+    private TextView mSubIdView;
     public View mMessageBlock;
     private QuickContactDivot mAvatar;
     static private Drawable sDefaultContactImage;
@@ -136,6 +137,7 @@ public class MessageListItem extends LinearLayout implements
 
         mBodyTextView = (TextView) findViewById(R.id.text_view);
         mDateView = (TextView) findViewById(R.id.date_view);
+        mSubIdView = (TextView) findViewById(R.id.sub_id);
         mLockedIndicator = (ImageView) findViewById(R.id.locked_indicator);
         mDeliveredIndicator = (ImageView) findViewById(R.id.delivered_indicator);
         mDetailsIndicator = (ImageView) findViewById(R.id.details_indicator);
@@ -198,6 +200,9 @@ public class MessageListItem extends LinearLayout implements
     }
 
     private void bindNotifInd() {
+        if (mMessageItem.mDisplayName != null) {
+            mSubIdView.setText(mMessageItem.mDisplayName);
+        }
         showMmsView(false);
 
         String msgSizeText = mContext.getString(R.string.message_size_label)
@@ -301,6 +306,9 @@ public class MessageListItem extends LinearLayout implements
     }
 
     private void bindCommonMessage(final boolean sameItem) {
+        if (mMessageItem.mDisplayName != null) {
+            mSubIdView.setText(mMessageItem.mDisplayName);
+        }
         if (mDownloadButton != null) {
             mDownloadButton.setVisibility(View.GONE);
             mDownloadingLabel.setVisibility(View.GONE);

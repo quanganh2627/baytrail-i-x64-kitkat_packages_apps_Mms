@@ -47,10 +47,12 @@ import android.provider.Telephony.Sms.Outbox;
 import android.telephony.ServiceState;
 import android.telephony.SmsManager;
 import android.telephony.SmsMessage;
+import android.telephony.SubscriptionManager;
 import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.android.internal.telephony.PhoneConstants;
 import com.android.internal.telephony.TelephonyIntents;
 import com.android.mms.LogTag;
 import com.android.mms.MmsConfig;
@@ -74,6 +76,7 @@ public class SmsReceiverService extends Service {
     private ServiceHandler mServiceHandler;
     private Looper mServiceLooper;
     private boolean mSending;
+    private int mCurrentSubId;
 
     public static final String MESSAGE_SENT_ACTION =
         "com.android.mms.transaction.MESSAGE_SENT";
@@ -375,6 +378,7 @@ public class SmsReceiverService extends Service {
     }
 
     private void handleSmsReceived(Intent intent, int error) {
+        mCurrentSubId = intent.getIntExtra(PhoneConstants.SUBSCRIPTION_KEY, SubscriptionManager.INVALID_SUBSCRIPTION_ID);
         SmsMessage[] msgs = Intents.getMessagesFromIntent(intent);
         String format = intent.getStringExtra("format");
         Uri messageUri = insertMessage(this, msgs, error, format);
@@ -557,6 +561,7 @@ public class SmsReceiverService extends Service {
         // Store the message in the content provider.
         ContentValues values = extractContentValues(sms);
         values.put(Sms.ERROR_CODE, error);
+        values.put(Sms.SUBSCRIPTION_ID, mCurrentSubId);
         int pduCount = msgs.length;
 
         if (pduCount == 1) {

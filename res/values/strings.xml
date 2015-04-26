@@ -801,4 +801,7 @@
     <string name="banner_sms_promo_title_application"><xliff:g id="appName">%s</xliff:g> is your SMS app</string>
     <string name="banner_sms_promo_message">You can change this in Settings</string>
 
+    <!--  Strings used for SMS MessageItem is not belong to ant SIM -->
+    <string name="sms_message_belong_unknown">unknown</string>
+
 </resources>
