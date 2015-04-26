@@ -77,7 +77,8 @@ public class MessageListAdapter extends CursorAdapter {
         PendingMessages.ERROR_TYPE,
         Mms.LOCKED,
         Mms.STATUS,
-        Mms.TEXT_ONLY
+        Mms.TEXT_ONLY,
+        Mms.SUBSCRIPTION_ID
     };
 
     // The indexes of the default columns which must be consistent
@@ -107,6 +108,7 @@ public class MessageListAdapter extends CursorAdapter {
     static final int COLUMN_MMS_LOCKED          = 22;
     static final int COLUMN_MMS_STATUS          = 23;
     static final int COLUMN_MMS_TEXT_ONLY       = 24;
+    static final int COLUMN_MMS_SUBSCRIPTION_ID = 25;
 
     private static final int CACHE_SIZE         = 50;
 
@@ -341,6 +343,7 @@ public class MessageListAdapter extends CursorAdapter {
         public int mColumnMmsLocked;
         public int mColumnMmsStatus;
         public int mColumnMmsTextOnly;
+        public int mColumnMmsSubscriptionId;
 
         public ColumnsMap() {
             mColumnMsgType            = COLUMN_MSG_TYPE;
@@ -363,6 +366,7 @@ public class MessageListAdapter extends CursorAdapter {
             mColumnMmsLocked          = COLUMN_MMS_LOCKED;
             mColumnMmsStatus          = COLUMN_MMS_STATUS;
             mColumnMmsTextOnly        = COLUMN_MMS_TEXT_ONLY;
+            mColumnMmsSubscriptionId  = COLUMN_MMS_SUBSCRIPTION_ID;
         }
 
         public ColumnsMap(Cursor cursor) {
