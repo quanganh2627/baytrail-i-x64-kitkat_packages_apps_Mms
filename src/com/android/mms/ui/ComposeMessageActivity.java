@@ -43,6 +43,7 @@ import java.util.regex.Pattern;
 import android.app.ActionBar;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
@@ -85,7 +86,10 @@ import android.provider.Settings;
 import android.provider.Telephony.Mms;
 import android.provider.Telephony.Sms;
 import android.telephony.PhoneNumberUtils;
+import android.telephony.SmsManager;
 import android.telephony.SmsMessage;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.InputFilter.LengthFilter;
@@ -100,19 +104,23 @@ import android.util.Log;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
 import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnCreateContextMenuListener;
 import android.view.View.OnKeyListener;
+import android.view.ViewGroup;
 import android.view.ViewStub;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.MimeTypeMap;
 import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.ListAdapter;
 import android.widget.ListView;
 import android.widget.SimpleAdapter;
 import android.widget.TextView;
@@ -343,6 +351,9 @@ public class ComposeMessageActivity extends Activity
     // keys for extras and icicles
     public final static String THREAD_ID = "thread_id";
     private final static String RECIPIENTS = "recipients";
+
+    // Dialog for sending sms in ask every time mode
+    private Dialog mChooseDialog;
 
     @SuppressWarnings("unused")
     public static void log(String logMsg) {
@@ -698,6 +709,70 @@ public class ComposeMessageActivity extends Activity
             dialog.dismiss();
         }
     }
+
+    public Dialog createDialog(final Context context) {
+        final ArrayList<String> list = new ArrayList<String>();
+        final SubscriptionManager subscriptionManager = SubscriptionManager.from(context);
+        final List<SubscriptionInfo> subInfoList =
+            subscriptionManager.getActiveSubscriptionInfoList();
+        final int selectableSubInfoLength = subInfoList == null ? 0 : subInfoList.size();
+
+        final DialogInterface.OnClickListener selectionListener =
+                new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int value) {
+                        final SubscriptionInfo sir;
+                        sir = subInfoList.get(value);
+                        System.setProperty("user.seleted.pref.sub",
+                               Integer.toString(sir.getSubscriptionId()));
+                        confirmSendMessageIfNeeded();
+                    }
+                };
+
+        Dialog.OnKeyListener keyListener = new Dialog.OnKeyListener() {
+            @Override
+            public boolean onKey(DialogInterface arg0, int keyCode,
+                    KeyEvent event) {
+                    if (keyCode == KeyEvent.KEYCODE_BACK) {
+                        mChooseDialog.dismiss();
+                    }
+                    return true;
+                }
+            };
+
+        for (int i = 0; i < selectableSubInfoLength; ++i) {
+            final SubscriptionInfo sir = subInfoList.get(i);
+            CharSequence displayName = sir.getDisplayName();
+            if (displayName == null) {
+                displayName = "";
+            }
+            list.add(displayName.toString());
+        }
+        String[] arr = list.toArray(new String[0]);
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+
+        ListAdapter adapter = new SelectAccountListAdapter(
+                subInfoList,
+                builder.getContext(),
+                R.layout.select_account_list_item,
+                arr, 0);
+
+        builder.setTitle(R.string.sim_card_select_title);
+
+        Dialog dialog = builder.setAdapter(adapter, selectionListener).create();
+        dialog.setOnKeyListener(keyListener);
+
+        dialog.setOnCancelListener(new DialogInterface.OnCancelListener() {
+            @Override
+            public void onCancel(DialogInterface dialogInterface) {
+                mChooseDialog.dismiss();
+            }
+        });
+
+        return dialog;
+
+    }
+
 
     private void confirmSendMessageIfNeeded() {
         if (!isRecipientsEditorVisible()) {
@@ -3388,7 +3463,14 @@ public class ComposeMessageActivity extends Activity
     @Override
     public void onClick(View v) {
         if ((v == mSendButtonSms || v == mSendButtonMms) && isPreparedForSending()) {
-            confirmSendMessageIfNeeded();
+            SmsManager smsManager = SmsManager.getDefault();
+            if (smsManager.isSMSPromptEnabled()) {
+                mChooseDialog = createDialog(ComposeMessageActivity.this);
+                mChooseDialog.show();
+            } else {
+                confirmSendMessageIfNeeded();
+            }
+
         } else if ((v == mRecipientsPicker)) {
             launchMultiplePhonePicker();
         }
@@ -4356,5 +4438,61 @@ public class ComposeMessageActivity extends Activity
             }
         }
         // If we're not running, but resume later, the current thread ID will be set in onResume()
+    }
+
+    private class SelectAccountListAdapter extends ArrayAdapter<String> {
+        private Context mContext;
+        private int mResId;
+        private int mDialogId;
+        private final float OPACITY = 0.54f;
+        private List<SubscriptionInfo> mSubInfoList;
+
+        public SelectAccountListAdapter(List<SubscriptionInfo> subInfoList,
+                Context context, int resource, String[] arr, int dialogId) {
+            super(context, resource, arr);
+            mContext = context;
+            mResId = resource;
+            mDialogId = dialogId;
+            mSubInfoList = subInfoList;
+        }
+
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            LayoutInflater inflater = (LayoutInflater)
+                    mContext.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+            View rowView;
+            final ViewHolder holder;
+
+            if (convertView == null) {
+                // Cache views for faster scrolling
+                rowView = inflater.inflate(mResId, null);
+                holder = new ViewHolder();
+                holder.title = (TextView) rowView.findViewById(R.id.title);
+                holder.summary = (TextView) rowView.findViewById(R.id.summary);
+                holder.icon = (ImageView) rowView.findViewById(R.id.icon);
+                rowView.setTag(holder);
+            } else {
+                rowView = convertView;
+                holder = (ViewHolder) rowView.getTag();
+            }
+
+            final SubscriptionInfo sir = mSubInfoList.get(position);
+            if (sir == null) {
+                holder.title.setText(getItem(position));
+                holder.summary.setText("");
+                holder.icon.setAlpha(OPACITY);
+            } else {
+                holder.title.setText(sir.getDisplayName());
+                holder.summary.setText(sir.getNumber());
+                holder.icon.setImageBitmap(sir.createIconBitmap(mContext));
+            }
+            return rowView;
+        }
+
+        private class ViewHolder {
+            TextView title;
+            TextView summary;
+            ImageView icon;
+        }
     }
 }
