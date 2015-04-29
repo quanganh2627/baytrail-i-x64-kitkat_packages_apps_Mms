@@ -165,7 +165,7 @@
     <string name="mms">MMS</string>
     <!-- Content description for the send button when sending an mms (imperative verb) -->
     <string name="send_mms">Send MMS</string>
-
+    <string name="sim_card_select_title">Select SIM card</string>
     <!-- Menu item in conversation screen for returning to the conversation list -->
     <string name="all_threads">All threads</string>
 

@@ -27,6 +27,8 @@ import android.net.Uri;
 import android.preference.PreferenceManager;
 import android.provider.Telephony.Sms;
 import android.provider.Telephony.Sms.Inbox;
+import android.telephony.SmsManager;
+import android.telephony.SubscriptionManager;
 import android.util.Log;
 
 import com.android.mms.LogTag;
@@ -87,12 +89,21 @@ public class SmsMessageSender implements MessageSender {
                 MessagingPreferenceActivity.SMS_DELIVERY_REPORT_MODE,
                 DEFAULT_DELIVERY_REPORT_MODE);
 
+        String preferSubId = System.getProperty("user.seleted.pref.sub");
+        int subId = SubscriptionManager.getDefaultSmsSubId();
+        SmsManager smsManager = SmsManager.getDefault();
+
+        if (smsManager.isSMSPromptEnabled() && null != preferSubId) {
+            if (!preferSubId.isEmpty()) {
+                subId = Integer.parseInt(preferSubId);
+            }
+        }
         for (int i = 0; i < mNumberOfDests; i++) {
             try {
                 if (LogTag.DEBUG_SEND) {
                     Log.v(TAG, "queueMessage mDests[i]: " + mDests[i] + " mThreadId: " + mThreadId);
                 }
-                Sms.addMessageToUri(mContext.getContentResolver(),
+                Sms.addMessageToUri(subId,mContext.getContentResolver(),
                         Uri.parse("content://sms/queued"), mDests[i],
                         mMessageText, null, mTimestamp,
                         true /* read */,
