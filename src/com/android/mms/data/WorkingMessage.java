@@ -40,6 +40,7 @@ import android.provider.Telephony.MmsSms;
 import android.provider.Telephony.MmsSms.PendingMessages;
 import android.provider.Telephony.Sms;
 import android.telephony.SmsMessage;
+import android.telephony.SubscriptionManager;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.Pair;
@@ -1390,6 +1391,7 @@ public class WorkingMessage {
                 values.put(Mms.MESSAGE_BOX, Mms.MESSAGE_BOX_OUTBOX);
                 values.put(Mms.THREAD_ID, threadId);
                 values.put(Mms.MESSAGE_TYPE, PduHeaders.MESSAGE_TYPE_SEND_REQ);
+                values.put(Mms.SUBSCRIPTION_ID, SubscriptionManager.getDefaultDataSubId());
                 if (textOnly) {
                     values.put(Mms.TEXT_ONLY, 1);
                 }

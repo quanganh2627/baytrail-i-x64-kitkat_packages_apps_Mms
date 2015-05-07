@@ -24,6 +24,7 @@ import android.database.sqlite.SqliteWrapper;
 import android.net.Uri;
 import android.provider.Telephony.Mms;
 import android.provider.Telephony.Mms.Inbox;
+import android.telephony.SubscriptionManager;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -156,8 +157,9 @@ public class RetrieveTransaction extends Transaction implements Runnable {
                         MessagingPreferenceActivity.getIsGroupMmsEnabled(mContext), null);
 
                 // Use local time instead of PDU time
-                ContentValues values = new ContentValues(1);
+                ContentValues values = new ContentValues(2);
                 values.put(Mms.DATE, System.currentTimeMillis() / 1000L);
+                values.put(Mms.SUBSCRIPTION_ID, SubscriptionManager.getDefaultDataSubId());
                 SqliteWrapper.update(mContext, mContext.getContentResolver(),
                         msgUri, values, null, null);
 
