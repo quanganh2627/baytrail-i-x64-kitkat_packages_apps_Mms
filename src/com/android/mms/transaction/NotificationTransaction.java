@@ -31,6 +31,7 @@ import android.net.Uri;
 import android.provider.Telephony.Mms;
 import android.provider.Telephony.Mms.Inbox;
 import android.provider.Telephony.Threads;
+import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
@@ -190,6 +191,7 @@ public class NotificationTransaction extends Transaction implements Runnable {
                     // Use local time instead of PDU time
                     ContentValues values = new ContentValues(1);
                     values.put(Mms.DATE, System.currentTimeMillis() / 1000L);
+                    values.put(Mms.SUBSCRIPTION_ID, SubscriptionManager.getDefaultDataSubId());
                     SqliteWrapper.update(mContext, mContext.getContentResolver(),
                             uri, values, null, null);
 
