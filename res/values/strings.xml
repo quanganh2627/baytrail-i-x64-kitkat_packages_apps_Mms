@@ -330,8 +330,10 @@
     <!-- Summary for SMS Enabled -->
     <string name="pref_summary_sms_enabled">Touch to change your default SMS app</string>
 
-    <!-- Settings item description for entering SIM card message screen -->
-    <string name="pref_summary_manage_sim_messages">Manage messages stored on your SIM card</string>
+    <!-- Settings item description for entering SIM card 1 message screen -->
+    <string name="pref_summary_manage_sim1_messages">Manage messages stored on your SIM card 1</string>
+    <!-- Settings item description for entering SIM card 2 message screen -->
+    <string name="pref_summary_manage_sim2_messages">Manage messages stored on your SIM card 2</string>
     <!-- Settings item description for boolean MMS delivery report setting -->
     <string name="pref_summary_mms_delivery_reports">Request a delivery report for each message you send</string>
     <!-- Settings item description for boolean MMS read report setting -->
@@ -344,8 +346,10 @@
     <string name="pref_summary_delete_limit"><xliff:g id="count">%1$s</xliff:g> messages per conversation</string>
     <!-- Settings item description for boolean MMS enable group MMS setting -->
     <string name="pref_summary_mms_group_mms">Use MMS to send a single message when there are multiple recipients</string>
-    <!-- Settings item for entering SIM card message screen -->
-    <string name="pref_title_manage_sim_messages">Manage SIM card messages</string>
+    <!-- Settings item for entering SIM card 1 message screen -->
+    <string name="pref_title_manage_sim1_messages">Manage SIM card 1 messages</string>
+    <!-- Settings item for entering SIM card 2 message screen -->
+    <string name="pref_title_manage_sim2_messages">Manage SIM card 2 messages</string>
     <!-- Settings item for boolean option to enable/disable MMS delivery reports -->
     <string name="pref_title_mms_delivery_reports">Delivery reports</string>
     <!-- Settings item for boolean option to enable/disable MMS group messages -->

@@ -59,6 +59,8 @@ import com.android.mms.transaction.MessagingNotification;
 public class ManageSimMessages extends Activity
         implements View.OnCreateContextMenuListener {
     private static final Uri ICC_URI = Uri.parse("content://sms/icc");
+    private static final Uri ICC1_URI = Uri.parse("content://sms/icc1");
+    private static final Uri ICC2_URI = Uri.parse("content://sms/icc2");
     private static final String TAG = LogTag.TAG;
     private static final int MENU_COPY_TO_PHONE_MEMORY = 0;
     private static final int MENU_DELETE_FROM_SIM = 1;
@@ -69,6 +71,12 @@ public class ManageSimMessages extends Activity
     private static final int SHOW_EMPTY = 1;
     private static final int SHOW_BUSY = 2;
     private int mState;
+    private static final String SLOT_ID = "slot_id";
+    private static final int SLOT_1 = 0;
+    private static final int SLOT_2 = 1;
+    private static final int INVALID_SLOT_ID = -1;
+    private static final int INVALID_UID = -1;
+    private int mSlot = 0;
 
 
     private ContentResolver mContentResolver;
@@ -114,6 +122,7 @@ public class ManageSimMessages extends Activity
 
         ActionBar actionBar = getActionBar();
         actionBar.setDisplayHomeAsUpEnabled(true);
+        mSlot = getIntent().getIntExtra(SLOT_ID, INVALID_SLOT_ID);
 
         init();
     }
@@ -121,7 +130,6 @@ public class ManageSimMessages extends Activity
     @Override
     protected void onNewIntent(Intent intent) {
         setIntent(intent);
-
         init();
     }
 
@@ -176,7 +184,12 @@ public class ManageSimMessages extends Activity
 
     private void startQuery() {
         try {
-            mQueryHandler.startQuery(0, null, ICC_URI, null, null, null, null);
+            if (mSlot == SLOT_1) {
+                mQueryHandler.startQuery(0, null, ICC1_URI, null, null, null, null);
+            } else if (mSlot == SLOT_2) {
+                mQueryHandler.startQuery(0, null, ICC2_URI, null, null, null, null);
+            }
+
         } catch (SQLiteException e) {
             SqliteWrapper.checkSQLiteException(this, e);
         }
@@ -284,7 +297,13 @@ public class ManageSimMessages extends Activity
     private void deleteFromSim(Cursor cursor) {
         String messageIndexString =
                 cursor.getString(cursor.getColumnIndexOrThrow("index_on_icc"));
-        Uri simUri = ICC_URI.buildUpon().appendPath(messageIndexString).build();
+
+        Uri simUri = null;
+        if (mSlot == SLOT_1) {
+            simUri = ICC1_URI.buildUpon().appendPath(messageIndexString).build();
+        } else if (mSlot == SLOT_2) {
+            simUri = ICC2_URI.buildUpon().appendPath(messageIndexString).build();
+        }
 
         SqliteWrapper.delete(this, mContentResolver, simUri, null, null);
     }

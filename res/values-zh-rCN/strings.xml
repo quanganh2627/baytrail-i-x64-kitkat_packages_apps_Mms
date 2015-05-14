@@ -163,14 +163,16 @@
     <string name="pref_summary_sms_disabled" msgid="8975773722051230744">"触摸即可将“短信”设为您的默认短信应用"</string>
     <string name="pref_title_sms_enabled" msgid="1857849790200375277">"短信功能已开启"</string>
     <string name="pref_summary_sms_enabled" msgid="2106125420361911250">"触摸即可更改您的默认短信应用"</string>
-    <string name="pref_summary_manage_sim_messages" msgid="4141349892597640864">"管理SIM卡中存储的信息"</string>
+    <string name="pref_summary_manage_sim1_messages" msgid="4141349892597640864">"管理SIM1卡中存储的信息"</string>
+    <string name="pref_summary_manage_sim2_messages">"管理SIM2卡中存储的信息"</string>
     <string name="pref_summary_mms_delivery_reports" msgid="4874657984217756112">"要求每次发送信息后都返回发送报告"</string>
     <string name="pref_summary_mms_read_reports" msgid="2748323864008907440">"要求每次发送信息后都返回已读回执"</string>
     <string name="pref_summary_sms_delivery_reports" msgid="5852207702358546129">"要求每次发送信息后都返回发送报告"</string>
     <string name="pref_summary_auto_delete" msgid="7719538116486177613">"达到数量上限时删除旧信息"</string>
     <string name="pref_summary_delete_limit" msgid="597128041393045216">"每个会话限存储 <xliff:g id="COUNT">%1$s</xliff:g> 条信息"</string>
     <string name="pref_summary_mms_group_mms" msgid="2266928687440696745">"使用彩信将单条信息发送给多个收件人"</string>
-    <string name="pref_title_manage_sim_messages" msgid="7820895261757881177">"管理SIM卡中的信息"</string>
+    <string name="pref_title_manage_sim1_messages" msgid="7820895261757881177">"管理SIM1卡中的信息"</string>
+    <string name="pref_title_manage_sim2_messages">"管理SIM2卡中的信息"</string>
     <string name="pref_title_mms_delivery_reports" msgid="6666857926679451910">"发送报告"</string>
     <string name="pref_title_mms_group_mms" msgid="1251698526583908432">"群发信息"</string>
     <string name="pref_title_mms_read_reports" msgid="4882179829495828541">"已读报告"</string>
